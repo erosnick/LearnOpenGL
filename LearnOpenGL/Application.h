@@ -46,8 +46,12 @@ private:
 	Shader shader;
 	Texture texture;
 	Texture anotherTexture;
+
 	float aspectRatio;
 	float fov = 45.0f;
+	float nearZ = 0.1f;
+	float farZ = 100.0f;
+
 	float alpha;
 	float rotateAngle;
 

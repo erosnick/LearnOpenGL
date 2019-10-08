@@ -350,9 +350,19 @@ void Application::render()
 		               cameraPosition + cameraFront, 
 		               cameraUp);
 
-	projection = glm::mat4(1.0f);
+	//view = glm::lookAtLH(cameraPosition + cameraFront, cameraPosition, cameraUp);
 
-	projection = glm::perspective(glm::radians(fov), aspectRatio, 0.1f, 100.0f);
+	projection = glm::perspective(glm::radians(fov), aspectRatio, nearZ, farZ);
+
+	projection = glm::mat4(0.0f);
+
+	float tanHalfFovY = glm::tan(fov / 2);
+
+	projection[0][0] = 1.0f / (aspectRatio * tanHalfFovY);
+	projection[1][1] = 1.0f / tanHalfFovY;
+	projection[2][2] = (-nearZ - farZ) / (nearZ - farZ);
+	projection[2][3] = 1.0f;
+	projection[3][2] = (2 * farZ * nearZ) / (nearZ - farZ);
 
 	shader.setMat4("model", model);
 	shader.setMat4("view", view);
