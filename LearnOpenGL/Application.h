@@ -6,6 +6,7 @@
 #include "Texture.h"
 #include "Camera.h"
 #include "Model.h"
+#include "imgui.h"
 
 class Application
 {
@@ -36,7 +37,8 @@ private:
 	void processInput(GLFWwindow* window);
 
 	void internalKeyCallback(GLFWwindow* window, int key, int scanCode, int action, int mods);
-	void internalMouseCallback(GLFWwindow* window, double xPos, double yPos);
+	void internalMouseMoveCallback(GLFWwindow* window, double xPos, double yPos);
+	void internalMouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 	void internalScrollCallback(GLFWwindow* window, double xOffset, double yOffset);
 
 	void CheckMaximumVertexAttributesSupport();
@@ -44,15 +46,22 @@ private:
 private:
 
 	GLFWwindow* appWindow;
+
 	int width;
 	int height;
+
 	unsigned int VAO[5];
+
 	GLenum polygonMode = GL_FILL;
+
 	Shader textureShader;
 	Shader basicShader;
 	Shader lightShader;
+
 	Texture texture;
 	Texture anotherTexture;
+
+	ImVec4 clearColor = ImVec4(0.392f, 0.584f, 0.929f, 1.0f);
 
 	float aspectRatio;
 	float fov = 45.0f;
@@ -70,7 +79,7 @@ private:
 	float lastX;
 	float lastY;
 	bool firstMouse;
-
+	bool cameraMove;
 	Camera camera;
 	Model cubeModel;
 	Model lightModel;

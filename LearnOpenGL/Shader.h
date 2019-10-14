@@ -35,6 +35,7 @@ public:
 	void setInt(const string& name, int value) const;
 	void setFloat(const string& name, float value) const;
 	void setVec3(const string& name, float v0, float v1, float v2);
+	void setVec3(const string& name, const glm::vec3& v);
 	void setVec4(const string& name, float v0, float v1, float v2, float v3);
 	void setMat4(const string& name, glm::mat4 transform);
 private:
