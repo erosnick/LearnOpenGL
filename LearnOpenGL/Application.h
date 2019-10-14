@@ -4,6 +4,7 @@
 #include <GLFW/glfw3.h>
 #include "Shader.h"
 #include "Texture.h"
+#include "Camera.h"
 
 class Application
 {
@@ -20,6 +21,8 @@ private:
 	void initialize();
 
 	GLFWwindow* createWindow(int Width, int Height);
+	
+	void bindCallbacks();
 
 	bool loadGLLoader();
 
@@ -55,24 +58,16 @@ private:
 	float alpha;
 	float rotateAngle;
 
-	glm::vec3 cameraPosition = glm::vec3(0.0f, 0.0f, 3.0f);
-	glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
-	glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
-
-	float cameraSpeed = 1.5f;
 	float sensitivity = 0.01f;
 
 	glm::mat4 model;
-	glm::mat4 view;
-	glm::mat4 projection;
 
 	float lastFrame;
 	float deltaTime;
 
-	float pitch;
-	float yaw = -90.0f; // yaw is initialized to -90.0 degrees since a yaw of 0.0 results in a direction vector pointing to the right so we initially rotate a bit to the left.
-
 	float lastX;
 	float lastY;
 	bool firstMouse;
+
+	Camera camera;
 };

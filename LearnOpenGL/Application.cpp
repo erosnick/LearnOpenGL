@@ -2,6 +2,7 @@
 #include <iostream>
 #include <algorithm>
 #include <functional>
+#include <vector>
 
 Application::Application(int inWidth, int inHeight)
 {
@@ -10,18 +11,20 @@ Application::Application(int inWidth, int inHeight)
 
 	aspectRatio = (float)width / (float)height;
 
-	alpha = 0.0f;
+	alpha = 0.5f;
 
 	rotateAngle = -50.0f;
 
 	model = glm::mat4(1.0f);
-	view = glm::mat4(1.0f);
-	projection = glm::mat4(1.0f);
 
 	lastX = width / 2.0f;
 	lastY = height / 2.0f;
 
 	firstMouse = true;
+
+	camera.setFOV(45.0f);
+	camera.setAspectRatio(aspectRatio);
+	camera.lookAt(glm::vec3(0.0f, 0.0f, 0.0f));
 
 	initialize();
 
@@ -44,6 +47,91 @@ Application::Application(int inWidth, int inHeight)
 
 	CheckMaximumVertexAttributesSupport();
 
+	bindCallbacks();
+
+	initVBO();
+
+	prepareResources();
+}
+
+void Application::run()
+{
+	while (!glfwWindowShouldClose(appWindow))
+	{
+		float currentFrame = glfwGetTime();
+
+		deltaTime = currentFrame - lastFrame;
+
+		lastFrame = currentFrame;
+
+		processInput(appWindow);
+
+		render();
+
+		glfwSwapBuffers(appWindow);
+		glfwPollEvents();
+	}
+
+	glfwTerminate();
+}
+
+void Application::render()
+{
+	glEnable(GL_DEPTH_TEST);
+	glClearColor(0.392f, 0.584f, 0.929f, 1.0f);
+	//glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	//float timeValue = glfwGetTime();
+	//float greenValue = (sin(timeValue) / 2.0f) + 0.5f;
+
+	//shader.use();
+
+	// 这里的glBindTexture可以用来切换不同的texture。
+	//texture.use();
+	//anotherTexture.use();
+
+	shader.setFloat("alpha", alpha);
+
+	model = glm::mat4(1.0f);
+
+	//rotateAngle += 0.01f;
+
+	model = glm::rotate(model, glm::radians(rotateAngle), glm::vec3(1.0f, 0.0f, 0.0f));
+
+	float radius = 5.0f;
+
+	float cameraX = sin(glfwGetTime()) * radius;      
+
+	shader.setMat4("model", model);
+	shader.setMat4("view", camera.viewMatrix());
+	shader.setMat4("projection", camera.projectionMatrix());
+
+	glBindVertexArray(VAO[2]);
+	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+	//glDrawArrays(GL_POINTS, 0, 36);
+	glBindVertexArray(0);
+}
+
+void Application::initialize()
+{
+	// Initialize GLFW. 
+	// Use OpenGL3.3, Core-Profile.
+	glfwInit();
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+}
+
+GLFWwindow* Application::createWindow(int Width, int Height)
+{
+	GLFWwindow* window = glfwCreateWindow(Width, Height, "LearnOpenGL", nullptr, nullptr);
+
+	return window;
+}
+
+void Application::bindCallbacks()
+{
 	glfwSetFramebufferSizeCallback(appWindow, resizeBuffer);
 
 	glfwSetWindowUserPointer(appWindow, this);
@@ -68,27 +156,6 @@ Application::Application(int inWidth, int inHeight)
 	};
 
 	glfwSetScrollCallback(appWindow, scrollCallback);
-
-	initVBO();
-
-	prepareResources();
-}
-
-void Application::initialize()
-{
-	// Initialize GLFW. 
-	// Use OpenGL3.3, Core-Profile.
-	glfwInit();
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-}
-
-GLFWwindow* Application::createWindow(int Width, int Height)
-{
-	GLFWwindow* window = glfwCreateWindow(Width, Height, "LearnOpenGL", nullptr, nullptr);
-
-	return window;
 }
 
 bool Application::loadGLLoader()
@@ -98,31 +165,52 @@ bool Application::loadGLLoader()
 
 void Application::initVBO()
 {
+	// 三角形
 	float vertices1[] = {
-		-0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f,
-		 0.5f, -0.5f, 0.5f, 0.0f, 1.0f, 0.0f,
-		 0.0f,  0.5f, 0.0f, 0.0f, 0.0f, 1.0f
+		 0.0f, -0.5f, 0.0f,
+		 0.5f,  0.5f, 0.5f,
+		-0.5f,  0.5f, 0.0f
 	};
 
 	unsigned int indices1[] = {
 		0, 1, 2
 	};
 
+	// 三角形-顶点颜色
 	float vertices2[] = {
-		 0.0f, -0.5f, 0.0f,
-		 0.5f,  0.5f, 0.5f,
-		-0.5f,  0.5f, 0.0f
+		-0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f,
+		 0.5f, -0.5f, 0.5f, 0.0f, 1.0f, 0.0f,
+		 0.0f,  0.5f, 0.0f, 0.0f, 0.0f, 1.0f
 	};
 
 	unsigned int indices2[] = {
 		0, 1, 2
 	};
 
-	float vertices[] = {
+	// 三角形-纹理
+	std::vector<float> vertices = {
 		0.5f,  0.5f, 0.0f, 1.0f, 1.0f,  // 右上角
 		0.5f, -0.5f, 0.0f, 1.0f, 0.0f,  // 右下角
 	   -0.5f, -0.5f, 0.0f, 0.0f, 0.0f,  // 左下角
 	   -0.5f,  0.5f, 0.0f, 0.0f, 1.0f   // 左上角
+	};
+
+	struct Vertex
+	{
+		Vertex(float inX, float inY, float inZ, float inU, float inV)
+		{
+			x = inX;
+			y = inY;
+			z = inZ;
+			u = inU;
+			v = inV;
+		}
+
+		float x;
+		float y;
+		float z;
+		float u;
+		float v;
 	};
 
 	unsigned int indices[] = { // 注意索引从0开始! 
@@ -130,16 +218,23 @@ void Application::initVBO()
 		1, 2, 3  // 第二个三角形
 	};
 
-	float cube[] = {
-			   -0.5f,  0.5f,  0.5f, 0.0f, 1.0f,   //正面左上0
-			   -0.5f, -0.5f,  0.5f, 0.0f, 0.0f,   //正面左下1
-				0.5f, -0.5f,  0.5f, 1.0f, 0.0f,   //正面右下2
-				0.5f,  0.5f,  0.5f, 1.0f, 1.0f,   //正面右上3
-			   -0.5f,  0.5f, -0.5f, 0.0f, 1.0f,   //反面左上4
-			   -0.5f, -0.5f, -0.5f, 0.0f, 0.0f,   //反面左下5
-				0.5f, -0.5f, -0.5f, 1.0f, 0.0f,   //反面右下6
-				0.5f,  0.5f, -0.5f, 1.0f, 1.0f    //反面右上7
+	std::vector<Vertex> cube = {
+			   Vertex(-0.5f,  0.5f,  0.5f, 0.0f, 1.0f),   //正面左上0
+			   Vertex(-0.5f, -0.5f,  0.5f, 0.0f, 0.0f),   //正面左下1
+			   Vertex( 0.5f, -0.5f,  0.5f, 1.0f, 0.0f),   //正面右下2
+			   Vertex( 0.5f,  0.5f,  0.5f, 1.0f, 1.0f),   //正面右上3
+			   Vertex(-0.5f,  0.5f, -0.5f, 0.0f, 1.0f),   //反面左上4
+			   Vertex(-0.5f, -0.5f, -0.5f, 0.0f, 0.0f),   //反面左下5
+			   Vertex( 0.5f, -0.5f, -0.5f, 1.0f, 0.0f),   //反面右下6
+			   Vertex( 0.5f,  0.5f, -0.5f, 1.0f, 1.0f)    //反面右上7
 	};
+
+	//cube.clear();
+
+	for (int i = 0; i < 100; i++)
+	{
+
+	}
 
 	unsigned int cubeIndices[] = {
 				0, 3, 2, 0, 2, 1,    //正面
@@ -195,7 +290,7 @@ void Application::initVBO()
 
 	glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
 
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO[2]);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
@@ -213,7 +308,7 @@ void Application::initVBO()
 
 	glBindBuffer(GL_ARRAY_BUFFER, VBO[3]);
 
-	glBufferData(GL_ARRAY_BUFFER, sizeof(cube), cube, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, cube.size() * sizeof(Vertex), cube.data(), GL_STATIC_DRAW);
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO[3]);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), cubeIndices, GL_STATIC_DRAW);
@@ -257,32 +352,32 @@ void Application::processInput(GLFWwindow* window)
 
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 	{
-		cameraPosition += cameraFront * cameraSpeed * deltaTime;
+		camera.forward(deltaTime);
 	}
 
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
 	{
-		cameraPosition -= cameraFront * cameraSpeed * deltaTime;
+		camera.forward(-deltaTime);
 	}
 
 	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
 	{
-		cameraPosition -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed * deltaTime;
+		camera.right(-deltaTime);
 	}
 
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
 	{
-		cameraPosition += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed * deltaTime;
+		camera.right(deltaTime);
 	}
 
 	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
 	{
-		cameraPosition += cameraUp * cameraSpeed * deltaTime;
+		camera.up(deltaTime);
 	}
 
 	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
 	{
-		cameraPosition -= cameraUp * cameraSpeed * deltaTime;
+		camera.up(-deltaTime);
 	}
 }
 
@@ -293,84 +388,6 @@ void Application::CheckMaximumVertexAttributesSupport()
 	glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &numAttributes);
 
 	cout << "Maximum number of vertex attributes supported: " << numAttributes << endl;
-}
-
-void Application::run()
-{
-	while (!glfwWindowShouldClose(appWindow))
-	{
-		float currentFrame = glfwGetTime();
-
-		deltaTime = currentFrame - lastFrame;
-
-		lastFrame = currentFrame;
-
-		processInput(appWindow);
-
-		render();
-
-		glfwSwapBuffers(appWindow);
-		glfwPollEvents();
-	}
-
-	glfwTerminate();
-}
-
-void Application::render()
-{
-	glEnable(GL_DEPTH_TEST);
-	glClearColor(0.392f, 0.584f, 0.929f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	//float timeValue = glfwGetTime();
-	//float greenValue = (sin(timeValue) / 2.0f) + 0.5f;
-
-	//shader.use();
-
-	// 这里的glBindTexture可以用来切换不同的texture。
-	texture.use();
-	anotherTexture.use();
-
-	shader.setFloat("alpha", alpha);
-
-	model = glm::mat4(1.0f);
-
-	//rotateAngle += 0.01f;
-
-	model = glm::rotate(model, glm::radians(rotateAngle), glm::vec3(1.0f, 0.0f, 0.0f));
-
-	view = glm::mat4(1.0f);
-
-	float radius = 5.0f;
-
-	float cameraX = sin(glfwGetTime()) * radius;
-	float cameraY = cos(glfwGetTime()) * radius;
-
-	view = glm::lookAt(cameraPosition, 
-		               cameraPosition + cameraFront, 
-		               cameraUp);
-
-	//view = glm::lookAtLH(cameraPosition + cameraFront, cameraPosition, cameraUp);
-
-	projection = glm::perspective(glm::radians(fov), aspectRatio, nearZ, farZ);
-
-	projection = glm::mat4(0.0f);
-
-	float tanHalfFovY = glm::tan(fov / 2);
-
-	projection[0][0] = 1.0f / (aspectRatio * tanHalfFovY);
-	projection[1][1] = 1.0f / tanHalfFovY;
-	projection[2][2] = (-nearZ - farZ) / (nearZ - farZ);
-	projection[2][3] = 1.0f;
-	projection[3][2] = (2 * farZ * nearZ) / (nearZ - farZ);
-
-	shader.setMat4("model", model);
-	shader.setMat4("view", view);
-	shader.setMat4("projection", projection);
-
-	glBindVertexArray(VAO[3]);
-	glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-	glBindVertexArray(0);
 }
 
 void Application::internalKeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -436,26 +453,14 @@ void Application::internalMouseCallback(GLFWwindow* window, double xPos, double 
 	xOffset *= sensitivity;
 	yOffset *= sensitivity;
 
+	float yaw = camera.yaw;
+	float pitch = camera.pitch;
+
 	yaw += xOffset;
 	pitch += yOffset;
 
-	if (pitch > 89.0f)
-	{
-		pitch = 89.0f;
-	}
-
-	if (pitch < -89.0f)
-	{
-		pitch = -89.0f;
-	}
-
-	glm::vec3 front;
-
-	front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-	front.y = sin(glm::radians(pitch));
-	front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-
-	cameraFront = glm::normalize(front);
+	camera.setYaw(yaw);
+	camera.setPitch(pitch);
 }
 
 void Application::internalScrollCallback(GLFWwindow* window, double xOffset, double yOffset)
