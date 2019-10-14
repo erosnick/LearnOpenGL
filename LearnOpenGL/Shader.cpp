@@ -2,6 +2,7 @@
 
 Shader::Shader()
 {
+
 }
 
 void Shader::load(const std::string& vertexPath, const std::string& fragmentPath)
@@ -65,6 +66,11 @@ void Shader::setInt(const std::string& name, int value) const
 void Shader::setFloat(const std::string& name, float value) const
 {
 	glUniform1f(glGetUniformLocation(shaderProgram, name.c_str()), value);
+}
+
+void Shader::setVec3(const string& name, float v0, float v1, float v2)
+{
+	glUniform3f(glGetUniformLocation(shaderProgram, name.c_str()), v0, v1, v2);
 }
 
 void Shader::setVec4(const std::string& name, float v0, float v1, float v2, float v3)

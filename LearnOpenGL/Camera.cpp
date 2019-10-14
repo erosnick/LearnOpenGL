@@ -1,4 +1,5 @@
 #include "Camera.h"
+#include <iostream>
 
 Camera::Camera()
 {
@@ -17,12 +18,31 @@ void Camera::setAspectRatio(float inAspectRatio)
 
 void Camera::setPosition(const glm::vec3& position)
 {
-	cameraPosition - position;
+	cameraPosition = position;
 }
 
 void Camera::lookAt(const glm::vec3& center)
 {
 	cameraFront = center - cameraPosition;
+
+	float dot = glm::dot(normalize(cameraFront), glm::normalize(glm::vec3(0.0f, 0.0f, -1.0f)));
+	float angle = glm::degrees(glm::acos(dot));
+
+	// 判断向量B在向量A的左边还是右边。
+	// 向量A为基准向量, -z轴。
+	// B X A的结果中，如果y分量>0, 则A位于B左边；如果y分量<0,则A位于B右边。
+	glm::vec3 cross = glm::cross(cameraFront, glm::vec3(0.0f, 0.0f, -1.0f));
+	std::cout << "angle:" << angle << std::endl;
+	std::cout << "z:" << cross.y << std::endl;
+
+	if (cross.y > 0)
+	{
+		yaw += angle;
+	}
+	else
+	{
+		yaw -= angle;
+	}
 }
 
 void Camera::setFront(const glm::vec3 front)

@@ -44,10 +44,28 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\BasicVS.glsl">
+    <None Include="shaders\Texture.fs">
       <Filter>资源文件</Filter>
     </None>
-    <None Include="shaders\BasicFS.glsl">
+    <None Include="shaders\Texture.vs">
+      <Filter>资源文件</Filter>
+    </None>
+    <None Include="shaders\VertexColor.fs">
+      <Filter>资源文件</Filter>
+    </None>
+    <None Include="shaders\VertexColor.vs">
+      <Filter>资源文件</Filter>
+    </None>
+    <None Include="shaders\Basic.fs">
+      <Filter>资源文件</Filter>
+    </None>
+    <None Include="shaders\Basic.vs">
+      <Filter>资源文件</Filter>
+    </None>
+    <None Include="shaders\Light.fs">
+      <Filter>资源文件</Filter>
+    </None>
+    <None Include="shaders\Light.vs">
       <Filter>资源文件</Filter>
     </None>
   </ItemGroup>

@@ -13,9 +13,9 @@ Application::Application(int inWidth, int inHeight)
 
 	alpha = 0.5f;
 
-	rotateAngle = -50.0f;
+	rotateAngle = 0.0f;
 
-	model = glm::mat4(1.0f);
+	modelMatrix = glm::mat4(1.0f);
 
 	lastX = width / 2.0f;
 	lastY = height / 2.0f;
@@ -24,6 +24,7 @@ Application::Application(int inWidth, int inHeight)
 
 	camera.setFOV(45.0f);
 	camera.setAspectRatio(aspectRatio);
+	camera.setPosition(glm::vec3(5.0f, 0.0f, 5.0f));
 	camera.lookAt(glm::vec3(0.0f, 0.0f, 0.0f));
 
 	initialize();
@@ -91,25 +92,48 @@ void Application::render()
 	//texture.use();
 	//anotherTexture.use();
 
-	shader.setFloat("alpha", alpha);
+	textureShader.setFloat("alpha", alpha);
 
-	model = glm::mat4(1.0f);
+	modelMatrix = glm::mat4(1.0f);
 
-	//rotateAngle += 0.01f;
-
-	model = glm::rotate(model, glm::radians(rotateAngle), glm::vec3(1.0f, 0.0f, 0.0f));
+	//model = glm::rotate(model, glm::radians(rotateAngle), glm::vec3(0.0f, 1.0f, 0.0f));
 
 	float radius = 5.0f;
 
 	float cameraX = sin(glfwGetTime()) * radius;      
+	float cameraY = cos(glfwGetTime()) * radius;
 
-	shader.setMat4("model", model);
-	shader.setMat4("view", camera.viewMatrix());
-	shader.setMat4("projection", camera.projectionMatrix());
+	//textureShader.setMat4("model", model);
+	//textureShader.setMat4("view", camera.viewMatrix());
+	//textureShader.setMat4("projection", camera.projectionMatrix());
 
-	glBindVertexArray(VAO[2]);
-	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+	basicShader.use();
+
+	basicShader.setMat4("model", cubeModel.modelMatrix());
+	basicShader.setMat4("view", camera.viewMatrix());
+	basicShader.setMat4("projection", camera.projectionMatrix());
+
+	basicShader.setVec3("objectColor", 1.0f, 0.5f, 0.31f);
+	basicShader.setVec3("lightColor", 1.0f, 1.0f, 1.0f);
+
+	cubeModel.preDraw();
+	glDrawElements(GL_TRIANGLES, cubeModel.verticesCount(), GL_UNSIGNED_INT, 0);
 	//glDrawArrays(GL_POINTS, 0, 36);
+	glBindVertexArray(0);
+
+	modelMatrix = glm::translate(modelMatrix, glm::vec3(1.0f, 0.0f, 0.0f));
+	modelMatrix = glm::scale(modelMatrix, glm::vec3(0.5f, 0.5f, 0.5f));
+
+	lightShader.use();
+
+	lightShader.setMat4("model", lightModel.modelMatrix());
+	lightShader.setMat4("view", camera.viewMatrix());
+	lightShader.setMat4("projection", camera.projectionMatrix());
+
+	lightShader.setVec3("lightColor", 1.0f, 1.0f, 1.0f);
+
+	lightModel.preDraw();
+	glDrawElements(GL_TRIANGLES, lightModel.verticesCount(), GL_UNSIGNED_INT, 0);
 	glBindVertexArray(0);
 }
 
@@ -188,29 +212,11 @@ void Application::initVBO()
 	};
 
 	// 三角形-纹理
-	std::vector<float> vertices = {
-		0.5f,  0.5f, 0.0f, 1.0f, 1.0f,  // 右上角
-		0.5f, -0.5f, 0.0f, 1.0f, 0.0f,  // 右下角
-	   -0.5f, -0.5f, 0.0f, 0.0f, 0.0f,  // 左下角
-	   -0.5f,  0.5f, 0.0f, 0.0f, 1.0f   // 左上角
-	};
-
-	struct Vertex
-	{
-		Vertex(float inX, float inY, float inZ, float inU, float inV)
-		{
-			x = inX;
-			y = inY;
-			z = inZ;
-			u = inU;
-			v = inV;
-		}
-
-		float x;
-		float y;
-		float z;
-		float u;
-		float v;
+	std::vector<Vertex> vertices = {
+		Vertex( 0.5f,  0.5f, 0.0f, 1.0f, 1.0f),  // 右上角
+		Vertex( 0.5f, -0.5f, 0.0f, 1.0f, 0.0f),  // 右下角
+	    Vertex(-0.5f, -0.5f, 0.0f, 0.0f, 0.0f),  // 左下角
+	    Vertex(-0.5f,  0.5f, 0.0f, 0.0f, 1.0f)   // 左上角
 	};
 
 	unsigned int indices[] = { // 注意索引从0开始! 
@@ -229,14 +235,18 @@ void Application::initVBO()
 			   Vertex( 0.5f,  0.5f, -0.5f, 1.0f, 1.0f)    //反面右上7
 	};
 
-	//cube.clear();
+	std::vector<Vertex> lightCube = {
+			   Vertex(-0.5f,  0.5f,  0.5f, 0.0f, 1.0f),   //正面左上0
+			   Vertex(-0.5f, -0.5f,  0.5f, 0.0f, 0.0f),   //正面左下1
+			   Vertex( 0.5f, -0.5f,  0.5f, 1.0f, 0.0f),   //正面右下2
+			   Vertex( 0.5f,  0.5f,  0.5f, 1.0f, 1.0f),   //正面右上3
+			   Vertex(-0.5f,  0.5f, -0.5f, 0.0f, 1.0f),   //反面左上4
+			   Vertex(-0.5f, -0.5f, -0.5f, 0.0f, 0.0f),   //反面左下5
+			   Vertex( 0.5f, -0.5f, -0.5f, 1.0f, 0.0f),   //反面右下6
+			   Vertex( 0.5f,  0.5f, -0.5f, 1.0f, 1.0f)    //反面右上7
+	};
 
-	for (int i = 0; i < 100; i++)
-	{
-
-	}
-
-	unsigned int cubeIndices[] = {
+	std::vector<unsigned int> cubeIndices = {
 				0, 3, 2, 0, 2, 1,    //正面
 				0, 1, 5, 0, 5, 4,    //左面
 				0, 7, 3, 0, 4, 7,    //上面
@@ -245,13 +255,22 @@ void Application::initVBO()
 				6, 5, 1, 6, 1, 2     //下面
 	};
 
-	unsigned int VBO[4];
-	unsigned int IBO[4];
+	cubeModel.initialize();
+	cubeModel.loadData(cube, cubeIndices);
+	//cubeModel.setPosition(glm::vec3(-1.0f, 0.0f, 0.0f));
 
-	glGenBuffers(4, VBO);
-	glGenBuffers(4, IBO);
+	lightModel.initialize();
+	lightModel.loadData(cube, cubeIndices);
+	lightModel.setPosition(glm::vec3(1.0f, 0.0f, 0.0f));
+	lightModel.setScale(glm::vec3(0.5f));
 
-	glGenVertexArrays(4, VAO);
+	unsigned int VBO[5];
+	unsigned int IBO[5];
+
+	glGenBuffers(5, VBO);
+	glGenBuffers(5, IBO);
+
+	glGenVertexArrays(5, VAO);
 
 	// Initialize first VAO
 	glBindVertexArray(VAO[0]);
@@ -290,28 +309,10 @@ void Application::initVBO()
 
 	glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
 
-	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW);
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO[2]);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
-	// Position attribute.
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)0);
-	glEnableVertexAttribArray(0);
-
-	// TexCoord attribute.
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)(sizeof(float) * 3));
-	glEnableVertexAttribArray(1);
-
-	// Initialize fourth VAO
-	glBindVertexArray(VAO[3]);
-
-	glBindBuffer(GL_ARRAY_BUFFER, VBO[3]);
-
-	glBufferData(GL_ARRAY_BUFFER, cube.size() * sizeof(Vertex), cube.data(), GL_STATIC_DRAW);
-
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO[3]);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), cubeIndices, GL_STATIC_DRAW);
 
 	// Position attribute.
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)0);
@@ -324,18 +325,26 @@ void Application::initVBO()
 
 void Application::prepareResources()
 {
-	shader.load("shaders/Texture.vs", "shaders/Texture.fs");
+	basicShader.load("shaders/Basic.vs", "shaders/Basic.fs");
+
+	basicShader.use();
+
+	lightShader.load("shaders/Light.vs", "shaders/Light.fs");
+
+	lightShader.use();
+
+	textureShader.load("shaders/Texture.vs", "shaders/Texture.fs");
 
 	// don't forget to activate/use the shader before setting uniforms!
-	shader.use();
+	textureShader.use();
 
 	texture.load("resources/rexie01.jpg", GL_TEXTURE0);
 
-	shader.setInt("ourTexture", 0);
+	textureShader.setInt("ourTexture", 0);
 
 	anotherTexture.load("resources/rexie02.jpg", GL_TEXTURE1);
 
-	shader.setInt("anotherTexture", 1);
+	textureShader.setInt("anotherTexture", 1);
 }
 
 void Application::resizeBuffer(GLFWwindow* window, int width, int height)
@@ -479,4 +488,6 @@ void Application::internalScrollCallback(GLFWwindow* window, double xOffset, dou
 	{
 		fov = 90.0f;
 	}
+
+	camera.setFOV(fov);
 }

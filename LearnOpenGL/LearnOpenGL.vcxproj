@@ -138,8 +138,14 @@
     <ClCompile Include="Texture.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\BasicFS.glsl" />
-    <None Include="shaders\BasicVS.glsl" />
+    <None Include="shaders\Basic.fs" />
+    <None Include="shaders\Basic.vs" />
+    <None Include="shaders\Light.fs" />
+    <None Include="shaders\Light.vs" />
+    <None Include="shaders\Texture.fs" />
+    <None Include="shaders\Texture.vs" />
+    <None Include="shaders\VertexColor.fs" />
+    <None Include="shaders\VertexColor.vs" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Application.h" />

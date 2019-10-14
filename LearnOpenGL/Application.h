@@ -5,6 +5,7 @@
 #include "Shader.h"
 #include "Texture.h"
 #include "Camera.h"
+#include "Model.h"
 
 class Application
 {
@@ -41,26 +42,27 @@ private:
 	void CheckMaximumVertexAttributesSupport();
 
 private:
+
 	GLFWwindow* appWindow;
 	int width;
 	int height;
-	unsigned int VAO[4];
+	unsigned int VAO[5];
 	GLenum polygonMode = GL_FILL;
-	Shader shader;
+	Shader textureShader;
+	Shader basicShader;
+	Shader lightShader;
 	Texture texture;
 	Texture anotherTexture;
 
 	float aspectRatio;
 	float fov = 45.0f;
-	float nearZ = 0.1f;
-	float farZ = 100.0f;
 
 	float alpha;
 	float rotateAngle;
 
 	float sensitivity = 0.01f;
 
-	glm::mat4 model;
+	glm::mat4 modelMatrix;
 
 	float lastFrame;
 	float deltaTime;
@@ -70,4 +72,6 @@ private:
 	bool firstMouse;
 
 	Camera camera;
+	Model cubeModel;
+	Model lightModel;
 };
