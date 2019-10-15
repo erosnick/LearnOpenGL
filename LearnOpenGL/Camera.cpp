@@ -23,9 +23,9 @@ void Camera::setPosition(const glm::vec3& position)
 
 void Camera::lookAt(const glm::vec3& center)
 {
-	cameraFront = center - cameraPosition;
+	cameraFront = glm::normalize(center - cameraPosition);
 
-	float dot = glm::dot(normalize(cameraFront), glm::normalize(glm::vec3(0.0f, 0.0f, -1.0f)));
+	float dot = glm::dot(cameraFront, glm::normalize(glm::vec3(0.0f, 0.0f, -1.0f)));
 	float angle = glm::degrees(glm::acos(dot));
 
 	// 判断向量B在向量A的左边还是右边。
@@ -43,6 +43,9 @@ void Camera::lookAt(const glm::vec3& center)
 	{
 		yaw -= angle;
 	}
+
+	std::cout << "cameraFront(" << cameraFront.x << "," << cameraFront.y << "," << cameraFront.z << ")" << std::endl;
+	std::cout << "cameraUp(" << cameraUp.x << "," << cameraUp.y << "," << cameraUp.z << ")" << std::endl;
 }
 
 void Camera::setFront(const glm::vec3 front)
@@ -64,14 +67,34 @@ void Camera::setPitch(float inPitch)
 		pitch = -89.0f;
 	}
 
-	cameraFront = calculateRotation(pitch, yaw);
+	pitch *= sensitivity;
+
+	glm::mat3 pitchRotation = glm::mat3(glm::rotate(glm::radians(pitch), cameraRight));
+
+	cameraFront = glm::normalize(pitchRotation * cameraFront);
+	cameraUp = glm::normalize(pitchRotation * cameraUp);
+
+	cameraRight = glm::cross(cameraFront, glm::vec3(0.0f, 1.0f, 0.0f));
+
+	//std::cout << "cameraFront(" << cameraFront.x << "," << cameraFront.y << "," << cameraFront.z << ")" << std::endl;
+	//std::cout << "cameraUp(" << cameraUp.x << "," << cameraUp.y << "," << cameraUp.z << ")" << std::endl;
 }
 
 void Camera::setYaw(float inYaw)
 {
 	yaw = inYaw;
 
-	cameraFront = calculateRotation(pitch, yaw);
+	yaw *= sensitivity;
+
+	glm::mat3 yawRotation = glm::mat3(glm::rotate(glm::radians(yaw), cameraUp));
+
+	cameraFront = glm::normalize(yawRotation * cameraFront);
+	cameraRight = glm::normalize(yawRotation * cameraRight);
+
+	cameraUp = glm::cross(cameraRight, cameraFront);
+
+	//std::cout << "cameraFront(" << cameraFront.x << "," << cameraFront.y << "," << cameraFront.z << ")" << std::endl;
+	//std::cout << "cameraUp(" << cameraUp.x << "," << cameraUp.y << "," << cameraUp.z << ")" << std::endl;
 }
 
 void Camera::forward(float delta)
@@ -92,6 +115,7 @@ void Camera::up(float delta)
 glm::mat4& Camera::viewMatrix()
 {
 	view = glm::lookAt(cameraPosition, cameraPosition + cameraFront, cameraUp);
+
 	return view;
 }
 

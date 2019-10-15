@@ -16,9 +16,17 @@ public:
 
 	void run();
 
+	void renderImGui(bool showDemoWindow, bool showAnotherWindow);
+
+	void update(float delta);
+
 	void render();
 
 private:
+
+	void initImGui();
+
+	void buildImGuiWidgets(bool showDemoWindow, bool showAnotherWindow);
 
 	void initialize();
 
@@ -32,10 +40,9 @@ private:
 
 	void prepareResources();
 
-	static void resizeBuffer(GLFWwindow* window, int width, int height);
-
 	void processInput(GLFWwindow* window);
 
+	void internalResizeBufferCallback(GLFWwindow* window, int inWidth, int inHeight);
 	void internalKeyCallback(GLFWwindow* window, int key, int scanCode, int action, int mods);
 	void internalMouseMoveCallback(GLFWwindow* window, double xPos, double yPos);
 	void internalMouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
@@ -62,6 +69,9 @@ private:
 	Texture anotherTexture;
 
 	ImVec4 clearColor = ImVec4(0.392f, 0.584f, 0.929f, 1.0f);
+	ImVec4 lightColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+	ImVec4 lightPosition = 
+	float ambientStrength = 1.0f;
 
 	float aspectRatio;
 	float fov = 45.0f;
@@ -69,15 +79,17 @@ private:
 	float alpha;
 	float rotateAngle;
 
-	float sensitivity = 0.01f;
+	float timeSlice = 0.01666667f;
 
 	glm::mat4 modelMatrix;
 
-	float lastFrame;
-	float deltaTime;
+	double lastFrame;
+	double deltaTime;
 
-	float lastX;
-	float lastY;
+	double simulationTime = 0.0f;
+
+	double lastX;
+	double lastY;
 	bool firstMouse;
 	bool cameraMove;
 	Camera camera;

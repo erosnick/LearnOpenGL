@@ -27,9 +27,9 @@ Application::Application(int inWidth, int inHeight)
 
 	cameraMove = false;
 
-	camera.setFOV(45.0f);
+	camera.setFOV(glm::radians(45.0f));
 	camera.setAspectRatio(aspectRatio);
-	camera.setPosition(glm::vec3(5.0f, 0.0f, 5.0f));
+	camera.setPosition(glm::vec3(0.0f, 0.0f, 5.0f));
 	camera.lookAt(glm::vec3(0.0f, 0.0f, 0.0f));
 
 	initialize();
@@ -51,6 +51,135 @@ Application::Application(int inWidth, int inHeight)
 		std::cout << "Failed to initialize GLAD" << std::endl;
 	}
 
+	initImGui();
+
+	CheckMaximumVertexAttributesSupport();
+
+	bindCallbacks();
+
+	initVBO();
+
+	prepareResources();
+}
+
+void Application::run()
+{
+	// Our state
+	bool showDemoWindow = true;
+	bool showAnotherWindow = false;
+
+	while (!glfwWindowShouldClose(appWindow))
+	{
+		float realTime = glfwGetTime();
+
+		while (simulationTime < realTime)
+		{
+			simulationTime += timeSlice;
+			update(timeSlice);
+		}
+
+		render();
+
+		renderImGui(showDemoWindow, showAnotherWindow);
+
+
+		glfwSwapBuffers(appWindow);
+
+		// Poll and handle events (inputs, window resize, etc.)
+		// You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
+		// - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application.
+		// - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application.
+		// Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
+		glfwPollEvents();
+	}
+
+	// Cleanup
+	ImGui_ImplOpenGL3_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
+
+	glfwDestroyWindow(appWindow);
+	glfwTerminate();
+}
+
+void Application::renderImGui(bool showDemoWindow, bool showAnotherWindow)
+{
+	// Start the Dear ImGui frame
+	ImGui_ImplOpenGL3_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+
+	buildImGuiWidgets(showDemoWindow, showAnotherWindow);
+
+	// Rendering
+	ImGui::Render();
+
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
+void Application::update(float delta)
+{
+	processInput(appWindow);
+}
+
+void Application::render()
+{
+	glEnable(GL_DEPTH_TEST);
+	glClearColor(clearColor.x, clearColor.y, clearColor.z, 1.0f);
+	//glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	//shader.use();
+
+	// 这里的glBindTexture可以用来切换不同的texture。
+	//texture.use();
+	//anotherTexture.use();
+
+	modelMatrix = glm::mat4(1.0f);
+
+	double radius = 5.0f;
+
+	double cameraX = sin(glfwGetTime()) * radius;
+	double cameraY = cos(glfwGetTime()) * radius;
+
+	glm::mat4 rotation = glm::rotate(glm::radians(rotateAngle), glm::vec3(0.0f, 1.0f, 0.0f));
+
+	basicShader.use();
+
+	//basicShader.setMat4("model", rotation);
+	basicShader.setMat4("model", cubeModel.modelMatrix());
+	basicShader.setMat4("view", camera.viewMatrix());
+	basicShader.setMat4("projection", camera.projectionMatrix());
+
+	basicShader.setFloat("ambientStrength", ambientStrength);
+
+	basicShader.setVec3("objectColor", 1.0f, 0.5f, 0.31f);
+	basicShader.setVec3("lightColor", lightColor.x, lightColor.y, lightColor.z);
+
+	cubeModel.preDraw();
+	//glDrawElements(GL_TRIANGLES, cubeModel.verticesCount(), GL_UNSIGNED_INT, 0);
+	glDrawArrays(GL_TRIANGLES, 0, 36);
+	//glDrawArrays(GL_POINTS, 0, 36);
+	glBindVertexArray(0);
+
+	modelMatrix = glm::translate(modelMatrix, glm::vec3(1.0f, 0.0f, 0.0f));
+	modelMatrix = glm::scale(modelMatrix, glm::vec3(0.5f, 0.5f, 0.5f));
+
+	lightShader.use();
+
+	lightShader.setMat4("model", lightModel.modelMatrix());
+	lightShader.setMat4("view", camera.viewMatrix());
+	lightShader.setMat4("projection", camera.projectionMatrix());
+
+	lightShader.setVec3("lightColor", lightColor.x, lightColor.y, lightColor.z);
+
+	lightModel.preDraw();
+	glDrawElements(GL_TRIANGLES, lightModel.verticesCount(), GL_UNSIGNED_INT, 0);
+	glBindVertexArray(0);
+}
+
+void Application::initImGui()
+{
 	// Setup Dear ImGui context.
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -81,161 +210,47 @@ Application::Application(int inWidth, int inHeight)
 	//io.Fonts->AddFontFromFileTTF("../../misc/fonts/ProggyTiny.ttf", 10.0f);
 	//ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesJapanese());
 	//IM_ASSERT(font != NULL);
-
-	CheckMaximumVertexAttributesSupport();
-
-	bindCallbacks();
-
-	initVBO();
-
-	prepareResources();
 }
 
-void Application::run()
+void Application::buildImGuiWidgets(bool showDemoWindow, bool showAnotherWindow)
 {
-	// Our state
-	bool show_demo_window = true;
-	bool show_another_window = false;
+	// 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
+	if (showDemoWindow)
+		ImGui::ShowDemoWindow(&showDemoWindow);
 
-	while (!glfwWindowShouldClose(appWindow))
+	// 2. Show a simple window that we create ourselves. We use a Begin/End pair to created a named window.
 	{
-		float currentFrame = glfwGetTime();
+		static float f = 0.0f;
+		static int counter = 0;
 
-		deltaTime = currentFrame - lastFrame;
+		ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
 
-		lastFrame = currentFrame;
+		ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
+		ImGui::Checkbox("Demo Window", &showDemoWindow);      // Edit bools storing our window open/close state
+		ImGui::Checkbox("Another Window", &showAnotherWindow);
 
-		processInput(appWindow);
+		ImGui::SliderFloat("Ambient Strength", &ambientStrength, 0.1f, 1.0f); // Edit 1 float using a slider from 0.1f to 1.0f
+		ImGui::ColorEdit3("Clear color", (float*)&clearColor); // Edit 3 floats representing a color
+		ImGui::ColorEdit3("Light Color", (float*)&lightColor);
 
-		render();
+		if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
+			counter++;
+		ImGui::SameLine();
+		ImGui::Text("counter = %d", counter);
 
-		// Start the Dear ImGui frame
-		ImGui_ImplOpenGL3_NewFrame();
-		ImGui_ImplGlfw_NewFrame();
-		ImGui::NewFrame();
-
-		// 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-		if (show_demo_window)
-			ImGui::ShowDemoWindow(&show_demo_window);
-
-		// 2. Show a simple window that we create ourselves. We use a Begin/End pair to created a named window.
-		{
-			static float f = 0.0f;
-			static int counter = 0;
-
-			ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
-
-			ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-			ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-			ImGui::Checkbox("Another Window", &show_another_window);
-
-			ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-			ImGui::ColorEdit3("clear color", (float*)&clearColor); // Edit 3 floats representing a color
-
-			if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-				counter++;
-			ImGui::SameLine();
-			ImGui::Text("counter = %d", counter);
-
-			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-			ImGui::End();
-		}
-
-		// 3. Show another simple window.
-		if (show_another_window)
-		{
-			ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-			ImGui::Text("Hello from another window!");
-			if (ImGui::Button("Close Me"))
-				show_another_window = false;
-			ImGui::End();
-		}
-
-		// Rendering
-		ImGui::Render();
-
-		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-		glfwSwapBuffers(appWindow);
-
-		// Poll and handle events (inputs, window resize, etc.)
-		// You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
-		// - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application.
-		// - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application.
-		// Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
-		glfwPollEvents();
+		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+		ImGui::End();
 	}
 
-	// Cleanup
-	ImGui_ImplOpenGL3_Shutdown();
-	ImGui_ImplGlfw_Shutdown();
-	ImGui::DestroyContext();
-
-	glfwDestroyWindow(appWindow);
-	glfwTerminate();
-}
-
-void Application::render()
-{
-	glEnable(GL_DEPTH_TEST);
-	glClearColor(clearColor.x, clearColor.y, clearColor.z, 1.0f);
-	//glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	//float timeValue = glfwGetTime();
-	//float greenValue = (sin(timeValue) / 2.0f) + 0.5f;
-
-	//shader.use();
-
-	// 这里的glBindTexture可以用来切换不同的texture。
-	//texture.use();
-	//anotherTexture.use();
-
-	textureShader.setFloat("alpha", alpha);
-
-	modelMatrix = glm::mat4(1.0f);
-
-	//model = glm::rotate(model, glm::radians(rotateAngle), glm::vec3(0.0f, 1.0f, 0.0f));
-
-	float radius = 5.0f;
-
-	float cameraX = sin(glfwGetTime()) * radius;      
-	float cameraY = cos(glfwGetTime()) * radius;
-
-	//textureShader.setMat4("model", model);
-	//textureShader.setMat4("view", camera.viewMatrix());
-	//textureShader.setMat4("projection", camera.projectionMatrix());
-
-	glm::vec3 lightColor = glm::vec3(1.0f, 0.0f, 0.0f);
-
-	basicShader.use();
-
-	basicShader.setMat4("model", cubeModel.modelMatrix());
-	basicShader.setMat4("view", camera.viewMatrix());
-	basicShader.setMat4("projection", camera.projectionMatrix());
-
-	basicShader.setVec3("objectColor", 1.0f, 0.5f, 0.31f);
-	basicShader.setVec3("lightColor", lightColor.r, lightColor.g, lightColor.b);
-
-	cubeModel.preDraw();
-	glDrawElements(GL_TRIANGLES, cubeModel.verticesCount(), GL_UNSIGNED_INT, 0);
-	//glDrawArrays(GL_POINTS, 0, 36);
-	glBindVertexArray(0);
-
-	modelMatrix = glm::translate(modelMatrix, glm::vec3(1.0f, 0.0f, 0.0f));
-	modelMatrix = glm::scale(modelMatrix, glm::vec3(0.5f, 0.5f, 0.5f));
-
-	lightShader.use();
-
-	lightShader.setMat4("model", lightModel.modelMatrix());
-	lightShader.setMat4("view", camera.viewMatrix());
-	lightShader.setMat4("projection", camera.projectionMatrix());
-
-	lightShader.setVec3("lightColor", lightColor.r, lightColor.g, lightColor.b);
-
-	lightModel.preDraw();
-	glDrawElements(GL_TRIANGLES, lightModel.verticesCount(), GL_UNSIGNED_INT, 0);
-	glBindVertexArray(0);
+	// 3. Show another simple window.
+	if (showAnotherWindow)
+	{
+		ImGui::Begin("Another Window", &showAnotherWindow);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+		ImGui::Text("Hello from another window!");
+		if (ImGui::Button("Close Me"))
+			showAnotherWindow = false;
+		ImGui::End();
+	}
 }
 
 void Application::initialize()
@@ -257,9 +272,14 @@ GLFWwindow* Application::createWindow(int Width, int Height)
 
 void Application::bindCallbacks()
 {
-	glfwSetFramebufferSizeCallback(appWindow, resizeBuffer);
-
 	glfwSetWindowUserPointer(appWindow, this);
+
+	auto resizeBuffer = [](GLFWwindow* window, int inWidth, int inHeight)
+	{
+		static_cast<Application*>(glfwGetWindowUserPointer(window))->internalResizeBufferCallback(window, inWidth, inHeight);
+	};
+
+	glfwSetFramebufferSizeCallback(appWindow, resizeBuffer);
 
 	auto keyCallback = [](GLFWwindow* window, int key, int scancode, int action, int mods)
 	{
@@ -363,9 +383,56 @@ void Application::initVBO()
 				6, 5, 1, 6, 1, 2     //下面
 	};
 
+	std::vector<VertexNormal> normalVertices = {
+
+	 VertexNormal(-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f),
+	 VertexNormal( 0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f),
+	 VertexNormal( 0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f),
+	 VertexNormal( 0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f),
+	 VertexNormal(-0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f),
+	 VertexNormal(-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f),
+
+	 VertexNormal(-0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f),
+	 VertexNormal( 0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f),
+	 VertexNormal( 0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f),
+	 VertexNormal( 0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f),
+	 VertexNormal(-0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f),
+	 VertexNormal(-0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f),
+
+	 VertexNormal(-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f),
+	 VertexNormal(-0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f),
+	 VertexNormal(-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f),
+	 VertexNormal(-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f),
+	 VertexNormal(-0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f),
+	 VertexNormal(-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f),
+
+	 VertexNormal( 0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f),
+	 VertexNormal( 0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f),
+	 VertexNormal( 0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f),
+	 VertexNormal( 0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f),
+	 VertexNormal( 0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f),
+	 VertexNormal( 0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f),
+
+	 VertexNormal(-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f),
+	 VertexNormal( 0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f),
+	 VertexNormal( 0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f),
+	 VertexNormal( 0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f),
+	 VertexNormal(-0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f),
+	 VertexNormal(-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f),
+
+	 VertexNormal(-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f),
+	 VertexNormal( 0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f),
+	 VertexNormal( 0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f),
+	 VertexNormal( 0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f),
+	 VertexNormal(-0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f),
+	 VertexNormal(-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f)
+
+	};
+
 	cubeModel.initialize();
-	cubeModel.loadData(cube, cubeIndices);
-	//cubeModel.setPosition(glm::vec3(-1.0f, 0.0f, 0.0f));
+	//cubeModel.loadData(cube, cubeIndices);
+	cubeModel.loadData(normalVertices);
+	cubeModel.setPosition(glm::vec3(-1.0f, 0.0f, 0.0f));
 
 	lightModel.initialize();
 	lightModel.loadData(cube, cubeIndices);
@@ -455,11 +522,6 @@ void Application::prepareResources()
 	textureShader.setInt("anotherTexture", 1);
 }
 
-void Application::resizeBuffer(GLFWwindow* window, int width, int height)
-{
-	glViewport(0, 0, width, height);
-}
-
 void Application::processInput(GLFWwindow* window)
 {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -469,33 +531,65 @@ void Application::processInput(GLFWwindow* window)
 
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 	{
-		camera.forward(deltaTime);
+		camera.forward(timeSlice);
 	}
 
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
 	{
-		camera.forward(-deltaTime);
+		camera.forward(-timeSlice);
 	}
 
 	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
 	{
-		camera.right(-deltaTime);
+		camera.right(-timeSlice);
 	}
 
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
 	{
-		camera.right(deltaTime);
+		camera.right(timeSlice);
 	}
 
 	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
 	{
-		camera.up(deltaTime);
+		camera.up(timeSlice);
 	}
 
 	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
 	{
-		camera.up(-deltaTime);
+		camera.up(-timeSlice);
 	}
+
+	if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+	{
+		//camera.setPitch(-10.0f);
+	}
+
+	if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+	{
+		//camera.setPitch(10.0f);
+	}
+
+	if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+	{
+		//camera.setYaw(10.0f);
+	}
+
+	if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+	{
+		//camera.setYaw(-10.0f);
+	}
+}
+
+void Application::internalResizeBufferCallback(GLFWwindow* window, int inWidth, int inHeight)
+{
+	width = inWidth;
+	height = inHeight;
+
+	aspectRatio = (float)width / (float)height;
+
+	camera.setAspectRatio(aspectRatio);
+
+	glViewport(0, 0, width, height);
 }
 
 void Application::CheckMaximumVertexAttributesSupport()
@@ -529,27 +623,32 @@ void Application::internalKeyCallback(GLFWwindow* window, int key, int scancode,
 	if (key == GLFW_KEY_UP && action == GLFW_PRESS)
 	{
 		alpha += 0.1f;
-
 		alpha = std::min(1.0f, alpha);
+		camera.setPitch(-10.0f);
 	}
 
 	if (key == GLFW_KEY_DOWN && action == GLFW_PRESS)
 	{
 		alpha -= 0.1f;
 		alpha = std::max(0.0f, alpha);
+		camera.setPitch(10.0f);
 	}
 
 	if (key == GLFW_KEY_LEFT && action == GLFW_PRESS)
 	{
-		rotateAngle -= 5.0f;
-		rotateAngle = std::max(0.0f, rotateAngle);
+		//rotateAngle += 1.0f;
+		//rotateAngle = std::max(0.0f, rotateAngle);
+		camera.setYaw(-10.0f);
 	}
 
 	if (key == GLFW_KEY_RIGHT && action == GLFW_PRESS)
 	{
-		rotateAngle += 5.0f;
-		rotateAngle = std::min(360.0f, rotateAngle);
+		//rotateAngle -= 1.0f;
+		//rotateAngle = std::min(360.0f, rotateAngle);
+		camera.setYaw(10.0f);
 	}
+
+	ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
 }
 
 void Application::internalMouseMoveCallback(GLFWwindow* window, double xPos, double yPos)
@@ -563,23 +662,14 @@ void Application::internalMouseMoveCallback(GLFWwindow* window, double xPos, dou
 			firstMouse = false;
 		}
 
-		float xOffset = xPos - lastX;
-		float yOffset = lastY - yPos; // reversed since y - coordinates go from bottom to top
+		double xOffset = xPos - lastX;
+		double yOffset = lastY - yPos; // reversed since y - coordinates go from bottom to top
 
 		lastX = xPos;
 		lastY = yPos;
 
-		xOffset *= sensitivity;
-		yOffset *= sensitivity;
-
-		float yaw = camera.yaw;
-		float pitch = camera.pitch;
-
-		yaw += xOffset;
-		pitch += yOffset;
-
-		camera.setYaw(yaw);
-		camera.setPitch(pitch);
+		camera.setYaw(-xOffset);
+		camera.setPitch(yOffset);
 	}
 }
 
@@ -597,6 +687,10 @@ void Application::internalMouseButtonCallback(GLFWwindow* window, int button, in
 	{
 		cameraMove = false;
 	}
+
+	glfwGetCursorPos(window, &lastX, &lastY);
+
+	ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
 }
 
 void Application::internalScrollCallback(GLFWwindow* window, double xOffset, double yOffset)
@@ -616,5 +710,7 @@ void Application::internalScrollCallback(GLFWwindow* window, double xOffset, dou
 		fov = 90.0f;
 	}
 
-	camera.setFOV(fov);
+	camera.setFOV(glm::radians(fov));
+
+	ImGui_ImplGlfw_ScrollCallback(window, xOffset, yOffset);
 }
