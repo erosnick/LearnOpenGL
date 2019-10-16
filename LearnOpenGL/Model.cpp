@@ -68,7 +68,9 @@ void Model::setPosition(const glm::vec3& inPosition)
 {
 	position = inPosition;
 
-	model = glm::translate(model, position);
+	model[3][0] = position.x;
+	model[3][1] = position.y;
+	model[3][2] = position.z;
 }
 
 void Model::setScale(const glm::vec3& inScale)

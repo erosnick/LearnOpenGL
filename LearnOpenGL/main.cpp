@@ -6,7 +6,7 @@
 
 int main()
 {
-	Application app(1280, 960);
+	Application app(1280, 720);
 
 	app.run();
 

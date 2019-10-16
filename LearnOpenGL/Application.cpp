@@ -18,14 +18,11 @@ Application::Application(int inWidth, int inHeight)
 
 	rotateAngle = 0.0f;
 
-	modelMatrix = glm::mat4(1.0f);
-
 	lastX = width / 2.0f;
 	lastY = height / 2.0f;
 
-	firstMouse = true;
-
-	cameraMove = false;
+	cameraControl = false;
+	cameraPan = false;
 
 	camera.setFOV(glm::radians(45.0f));
 	camera.setAspectRatio(aspectRatio);
@@ -64,10 +61,6 @@ Application::Application(int inWidth, int inHeight)
 
 void Application::run()
 {
-	// Our state
-	bool showDemoWindow = true;
-	bool showAnotherWindow = false;
-
 	while (!glfwWindowShouldClose(appWindow))
 	{
 		float realTime = glfwGetTime();
@@ -80,7 +73,7 @@ void Application::run()
 
 		render();
 
-		renderImGui(showDemoWindow, showAnotherWindow);
+		renderImGui();
 
 
 		glfwSwapBuffers(appWindow);
@@ -102,14 +95,14 @@ void Application::run()
 	glfwTerminate();
 }
 
-void Application::renderImGui(bool showDemoWindow, bool showAnotherWindow)
+void Application::renderImGui()
 {
 	// Start the Dear ImGui frame
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
-	buildImGuiWidgets(showDemoWindow, showAnotherWindow);
+	buildImGuiWidgets();
 
 	// Rendering
 	ImGui::Render();
@@ -135,8 +128,6 @@ void Application::render()
 	//texture.use();
 	//anotherTexture.use();
 
-	modelMatrix = glm::mat4(1.0f);
-
 	double radius = 5.0f;
 
 	double cameraX = sin(glfwGetTime()) * radius;
@@ -152,7 +143,7 @@ void Application::render()
 	basicShader.setMat4("projection", camera.projectionMatrix());
 
 	basicShader.setFloat("ambientStrength", ambientStrength);
-
+	basicShader.setVec3("lightPosition", lightPosition.x, lightPosition.y, lightPosition.z);
 	basicShader.setVec3("objectColor", 1.0f, 0.5f, 0.31f);
 	basicShader.setVec3("lightColor", lightColor.x, lightColor.y, lightColor.z);
 
@@ -162,10 +153,9 @@ void Application::render()
 	//glDrawArrays(GL_POINTS, 0, 36);
 	glBindVertexArray(0);
 
-	modelMatrix = glm::translate(modelMatrix, glm::vec3(1.0f, 0.0f, 0.0f));
-	modelMatrix = glm::scale(modelMatrix, glm::vec3(0.5f, 0.5f, 0.5f));
-
 	lightShader.use();
+
+	lightModel.setPosition(glm::vec3(lightPosition.x, lightPosition.y, lightPosition.z));
 
 	lightShader.setMat4("model", lightModel.modelMatrix());
 	lightShader.setMat4("view", camera.viewMatrix());
@@ -188,7 +178,8 @@ void Application::initImGui()
 	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 
 	// Setup Dear ImGui style.
-	ImGui::StyleColorsDark();
+	ImGui::StyleColorsDark(); 
+	ImGui::GetStyle().ScaleAllSizes(1.0f);
 	// ImGui::StyleColorsClassic();
 
 	// Setup platform/Renderer bindings.
@@ -204,15 +195,15 @@ void Application::initImGui()
 	// - Read 'misc/fonts/README.txt' for more instructions and details.
 	// - Remember that in C/C++ if you want to include a backslash \ in a string literal you need to write a double backslash \\ !
 	//io.Fonts->AddFontDefault();
-	//io.Fonts->AddFontFromFileTTF("../../misc/fonts/Roboto-Medium.ttf", 16.0f);
-	//io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf", 15.0f);
-	//io.Fonts->AddFontFromFileTTF("../../misc/fonts/DroidSans.ttf", 16.0f);
-	//io.Fonts->AddFontFromFileTTF("../../misc/fonts/ProggyTiny.ttf", 10.0f);
+	fonts.push_back(io.Fonts->AddFontFromFileTTF("./imgui/misc/fonts/Roboto-Medium.ttf", 16.0f));
+	fonts.push_back(io.Fonts->AddFontFromFileTTF("./imgui/misc/fonts/Cousine-Regular.ttf", 15.0f));
+	fonts.push_back(io.Fonts->AddFontFromFileTTF("./imgui/misc/fonts/DroidSans.ttf", 16.0f));
+	fonts.push_back(io.Fonts->AddFontFromFileTTF("./imgui/misc/fonts/ProggyTiny.ttf", 10.0f));
 	//ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesJapanese());
 	//IM_ASSERT(font != NULL);
 }
 
-void Application::buildImGuiWidgets(bool showDemoWindow, bool showAnotherWindow)
+void Application::buildImGuiWidgets()
 {
 	// 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
 	if (showDemoWindow)
@@ -226,12 +217,16 @@ void Application::buildImGuiWidgets(bool showDemoWindow, bool showAnotherWindow)
 		ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
 
 		ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
+		ImGui::PushFont(fonts[2]);
+		ImGui::Text("This is some useful text use another font.");
+		ImGui::PopFont();
 		ImGui::Checkbox("Demo Window", &showDemoWindow);      // Edit bools storing our window open/close state
 		ImGui::Checkbox("Another Window", &showAnotherWindow);
 
 		ImGui::SliderFloat("Ambient Strength", &ambientStrength, 0.1f, 1.0f); // Edit 1 float using a slider from 0.1f to 1.0f
 		ImGui::ColorEdit3("Clear color", (float*)&clearColor); // Edit 3 floats representing a color
 		ImGui::ColorEdit3("Light Color", (float*)&lightColor);
+		ImGui::DragFloat3("Light Position", (float*)&lightPosition, 0.1f, 0.0f, 10.f);
 
 		if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
 			counter++;
@@ -436,7 +431,6 @@ void Application::initVBO()
 
 	lightModel.initialize();
 	lightModel.loadData(cube, cubeIndices);
-	lightModel.setPosition(glm::vec3(1.0f, 0.0f, 0.0f));
 	lightModel.setScale(glm::vec3(0.5f));
 
 	unsigned int VBO[5];
@@ -653,23 +647,22 @@ void Application::internalKeyCallback(GLFWwindow* window, int key, int scancode,
 
 void Application::internalMouseMoveCallback(GLFWwindow* window, double xPos, double yPos)
 {
-	if (cameraMove)
+	double xOffset = xPos - lastX;
+	double yOffset = lastY - yPos; // reversed since y - coordinates go from bottom to top
+
+	lastX = xPos;
+	lastY = yPos;
+
+	if (cameraControl)
 	{
-		if (firstMouse)
-		{
-			lastX = xPos;
-			lastY = yPos;
-			firstMouse = false;
-		}
-
-		double xOffset = xPos - lastX;
-		double yOffset = lastY - yPos; // reversed since y - coordinates go from bottom to top
-
-		lastX = xPos;
-		lastY = yPos;
-
 		camera.setYaw(-xOffset);
 		camera.setPitch(yOffset);
+	}
+
+	if (cameraPan)
+	{
+		camera.right(xOffset);
+		camera.up(yOffset);
 	}
 }
 
@@ -678,14 +671,24 @@ void Application::internalMouseButtonCallback(GLFWwindow* window, int button, in
 	// 0 - Êó±ê×ó¼ü
 	// 1 - Êó±êÓÒ¼ü
 	// 2 - Êó±êÖÐ¼ü
-	if (action == GLFW_PRESS && button == 1)
+	if (action == GLFW_PRESS && button == GLFW_KEY_RIGHT)
 	{
-		cameraMove = true;
+		cameraControl = true;
 	}
 
-	if (action == GLFW_RELEASE && button == 1)
+	if (action == GLFW_RELEASE &&        button == 1)
 	{
-		cameraMove = false;
+		cameraControl = false;
+	}
+
+	if (action == GLFW_PRESS && button == 2)
+	{                           
+		cameraPan = true;            
+	}        
+
+	if (action == GLFW_RELEASE && button == 2)
+	{
+		cameraPan = false;
 	}
 
 	glfwGetCursorPos(window, &lastX, &lastY);

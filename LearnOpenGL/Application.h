@@ -6,7 +6,7 @@
 #include "Texture.h"
 #include "Camera.h"
 #include "Model.h"
-#include "imgui.h"
+#include "imgui/imgui.h"
 
 class Application
 {
@@ -16,7 +16,7 @@ public:
 
 	void run();
 
-	void renderImGui(bool showDemoWindow, bool showAnotherWindow);
+	void renderImGui();
 
 	void update(float delta);
 
@@ -26,7 +26,7 @@ private:
 
 	void initImGui();
 
-	void buildImGuiWidgets(bool showDemoWindow, bool showAnotherWindow);
+	void buildImGuiWidgets();
 
 	void initialize();
 
@@ -68,9 +68,12 @@ private:
 	Texture texture;
 	Texture anotherTexture;
 
+	bool showDemoWindow = true;
+	bool showAnotherWindow = false;
+
 	ImVec4 clearColor = ImVec4(0.392f, 0.584f, 0.929f, 1.0f);
 	ImVec4 lightColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-	ImVec4 lightPosition = 
+	ImVec4 lightPosition = ImVec4(1.0f, 0.0f, 0.0f, 0.0f);
 	float ambientStrength = 1.0f;
 
 	float aspectRatio;
@@ -81,8 +84,6 @@ private:
 
 	float timeSlice = 0.01666667f;
 
-	glm::mat4 modelMatrix;
-
 	double lastFrame;
 	double deltaTime;
 
@@ -90,9 +91,12 @@ private:
 
 	double lastX;
 	double lastY;
-	bool firstMouse;
-	bool cameraMove;
+
+	bool cameraControl;
+	bool cameraPan;
 	Camera camera;
 	Model cubeModel;
 	Model lightModel;
+
+	std::vector<ImFont*> fonts;
 };
