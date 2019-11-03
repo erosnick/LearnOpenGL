@@ -94,9 +94,17 @@ private:
 
 	bool cameraControl;
 	bool cameraPan;
+	float panMoveRate = 0.1f;
+
+	double xOffset;
+	double yOffset;
+
+	glm::mat4 worldMatrix;
+
 	Camera camera;
 	Model cubeModel;
 	Model lightModel;
+	Model ray;
 
 	std::vector<ImFont*> fonts;
 };

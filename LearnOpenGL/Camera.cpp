@@ -43,9 +43,6 @@ void Camera::lookAt(const glm::vec3& center)
 	{
 		yaw -= angle;
 	}
-
-	std::cout << "cameraFront(" << cameraFront.x << "," << cameraFront.y << "," << cameraFront.z << ")" << std::endl;
-	std::cout << "cameraUp(" << cameraUp.x << "," << cameraUp.y << "," << cameraUp.z << ")" << std::endl;
 }
 
 void Camera::setFront(const glm::vec3 front)
@@ -75,9 +72,6 @@ void Camera::setPitch(float inPitch)
 	cameraUp = glm::normalize(pitchRotation * cameraUp);
 
 	cameraRight = glm::cross(cameraFront, glm::vec3(0.0f, 1.0f, 0.0f));
-
-	//std::cout << "cameraFront(" << cameraFront.x << "," << cameraFront.y << "," << cameraFront.z << ")" << std::endl;
-	//std::cout << "cameraUp(" << cameraUp.x << "," << cameraUp.y << "," << cameraUp.z << ")" << std::endl;
 }
 
 void Camera::setYaw(float inYaw)
@@ -92,9 +86,6 @@ void Camera::setYaw(float inYaw)
 	cameraRight = glm::normalize(yawRotation * cameraRight);
 
 	cameraUp = glm::cross(cameraRight, cameraFront);
-
-	//std::cout << "cameraFront(" << cameraFront.x << "," << cameraFront.y << "," << cameraFront.z << ")" << std::endl;
-	//std::cout << "cameraUp(" << cameraUp.x << "," << cameraUp.y << "," << cameraUp.z << ")" << std::endl;
 }
 
 void Camera::forward(float delta)

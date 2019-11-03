@@ -117,9 +117,12 @@ void Application::update(float delta)
 
 void Application::render()
 {
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);
+	glFrontFace(GL_CCW);
+
 	glEnable(GL_DEPTH_TEST);
 	glClearColor(clearColor.x, clearColor.y, clearColor.z, 1.0f);
-	//glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	//shader.use();
@@ -137,10 +140,16 @@ void Application::render()
 
 	basicShader.use();
 
+	worldMatrix = cubeModel.modelMatrix();
+
 	//basicShader.setMat4("model", rotation);
-	basicShader.setMat4("model", cubeModel.modelMatrix());
+	basicShader.setMat4("model", worldMatrix);
 	basicShader.setMat4("view", camera.viewMatrix());
 	basicShader.setMat4("projection", camera.projectionMatrix());
+
+	glm::mat4 modelView = camera.viewMatrix() * cubeModel.modelMatrix();
+
+	basicShader.setMat4("modelView", modelView);
 
 	basicShader.setFloat("ambientStrength", ambientStrength);
 	basicShader.setVec3("lightPosition", lightPosition.x, lightPosition.y, lightPosition.z);
@@ -157,7 +166,9 @@ void Application::render()
 
 	lightModel.setPosition(glm::vec3(lightPosition.x, lightPosition.y, lightPosition.z));
 
-	lightShader.setMat4("model", lightModel.modelMatrix());
+	worldMatrix = lightModel.modelMatrix();
+
+	lightShader.setMat4("model", worldMatrix);
 	lightShader.setMat4("view", camera.viewMatrix());
 	lightShader.setMat4("projection", camera.projectionMatrix());
 
@@ -165,6 +176,13 @@ void Application::render()
 
 	lightModel.preDraw();
 	glDrawElements(GL_TRIANGLES, lightModel.verticesCount(), GL_UNSIGNED_INT, 0);
+	glBindVertexArray(0);
+
+	lightShader.setMat4("model", ray.modelMatrix());
+
+	ray.preDraw();
+	//glDrawElements(GL_TRIANGLES, ray.verticesCount(), GL_UNSIGNED_INT, 0);
+	glDrawArrays(GL_LINE_STRIP, 0, 6);
 	glBindVertexArray(0);
 }
 
@@ -342,9 +360,9 @@ void Application::initVBO()
 	    Vertex(-0.5f,  0.5f, 0.0f, 0.0f, 1.0f)   // 左上角
 	};
 
-	unsigned int indices[] = { // 注意索引从0开始! 
-		0, 1, 3, // 第一个三角形
-		1, 2, 3  // 第二个三角形
+	std::vector<unsigned int> indices = { // 注意索引从0开始! 
+		0, 2, 1, // 第一个三角形
+		0, 3, 2  // 第二个三角形
 	};
 
 	std::vector<Vertex> cube = {
@@ -379,49 +397,65 @@ void Application::initVBO()
 	};
 
 	std::vector<VertexNormal> normalVertices = {
-
-	 VertexNormal(-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f),
+	 
+	 // 背面
+	 VertexNormal( 0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f),
 	 VertexNormal( 0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f),
-	 VertexNormal( 0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f),
-	 VertexNormal( 0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f),
-	 VertexNormal(-0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f),
 	 VertexNormal(-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f),
+	 VertexNormal( 0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f),
+	 VertexNormal(-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f),
+	 VertexNormal(-0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f),
 
-	 VertexNormal(-0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f),
-	 VertexNormal( 0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f),
-	 VertexNormal( 0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f),
-	 VertexNormal( 0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f),
+	 // 正面
 	 VertexNormal(-0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f),
 	 VertexNormal(-0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f),
+	 VertexNormal( 0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f),
+	 VertexNormal(-0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f),
+	 VertexNormal( 0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f),
+	 VertexNormal( 0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f),
 
-	 VertexNormal(-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f),
-	 VertexNormal(-0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f),
-	 VertexNormal(-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f),
-	 VertexNormal(-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f),
-	 VertexNormal(-0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f),
-	 VertexNormal(-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f),
+	 // 左面
+	 VertexNormal(-0.5f,  0.5f,  0.5f, -1.0f,  0.0f, 0.0f),
+	 VertexNormal(-0.5f,  0.5f, -0.5f, -1.0f,  0.0f, 0.0f),
+	 VertexNormal(-0.5f, -0.5f, -0.5f, -1.0f,  0.0f, 0.0f),
+	 VertexNormal(-0.5f, -0.5f, -0.5f, -1.0f,  0.0f, 0.0f),
+	 VertexNormal(-0.5f, -0.5f,  0.5f, -1.0f,  0.0f, 0.0f),
+	 VertexNormal(-0.5f,  0.5f,  0.5f, -1.0f,  0.0f, 0.0f),
 
-	 VertexNormal( 0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f),
-	 VertexNormal( 0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f),
-	 VertexNormal( 0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f),
-	 VertexNormal( 0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f),
-	 VertexNormal( 0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f),
-	 VertexNormal( 0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f),
+	 // 右面
+	 VertexNormal( 0.5f,  0.5f,  0.5f,  1.0f,  0.0f, 0.0f),
+	 VertexNormal( 0.5f, -0.5f,  0.5f,  1.0f,  0.0f, 0.0f),
+	 VertexNormal( 0.5f, -0.5f, -0.5f,  1.0f,  0.0f, 0.0f),
+	 VertexNormal( 0.5f,  0.5f,  0.5f,  1.0f,  0.0f, 0.0f),
+	 VertexNormal( 0.5f, -0.5f, -0.5f,  1.0f,  0.0f, 0.0f),
+	 VertexNormal( 0.5f,  0.5f, -0.5f,  1.0f,  0.0f, 0.0f),
 
-	 VertexNormal(-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f),
-	 VertexNormal( 0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f),
-	 VertexNormal( 0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f),
-	 VertexNormal( 0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f),
-	 VertexNormal(-0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f),
-	 VertexNormal(-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f),
+	 // 顶面
+	 VertexNormal(-0.5f,  0.5f, -0.5f,  0.0f,  1.0f, 0.0f),
+	 VertexNormal(-0.5f,  0.5f,  0.5f,  0.0f,  1.0f, 0.0f),
+	 VertexNormal( 0.5f,  0.5f,  0.5f,  0.0f,  1.0f, 0.0f),
+	 VertexNormal(-0.5f,  0.5f, -0.5f,  0.0f,  1.0f, 0.0f),
+	 VertexNormal( 0.5f,  0.5f,  0.5f,  0.0f,  1.0f, 0.0f),
+	 VertexNormal( 0.5f,  0.5f, -0.5f,  0.0f,  1.0f, 0.0f),
 
-	 VertexNormal(-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f),
-	 VertexNormal( 0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f),
-	 VertexNormal( 0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f),
-	 VertexNormal( 0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f),
-	 VertexNormal(-0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f),
-	 VertexNormal(-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f)
+	 // 底面
+	 VertexNormal(-0.5f, -0.5f, -0.5f,  0.0f, -1.0f, 0.0f),
+	 VertexNormal( 0.5f, -0.5f, -0.5f,  0.0f, -1.0f, 0.0f),
+	 VertexNormal( 0.5f, -0.5f,  0.5f,  0.0f, -1.0f, 0.0f),
+	 VertexNormal( 0.5f, -0.5f,  0.5f,  0.0f, -1.0f, 0.0f),
+	 VertexNormal(-0.5f, -0.5f,  0.5f,  0.0f, -1.0f, 0.0f),
+	 VertexNormal(-0.5f, -0.5f, -0.5f,  0.0f, -1.0f, 0.0f)
 
+	};
+
+	std::vector<Vertex> rayVertices = {
+		// 正面
+		Vertex(-0.5f,  0.5f,  0.5f,  0.0f,  0.0f),
+		Vertex(-0.5f, -0.5f,  0.5f,  0.0f,  0.0f),
+		Vertex( 0.5f, -0.5f,  0.5f,  0.0f,  0.0f),
+		Vertex(-0.5f,  0.5f,  0.5f,  0.0f,  0.0f),
+		Vertex( 0.5f, -0.5f,  0.5f,  0.0f,  0.0f),
+		Vertex( 0.5f,  0.5f,  0.5f,  0.0f,  0.0f),
 	};
 
 	cubeModel.initialize();
@@ -433,63 +467,67 @@ void Application::initVBO()
 	lightModel.loadData(cube, cubeIndices);
 	lightModel.setScale(glm::vec3(0.5f));
 
-	unsigned int VBO[5];
-	unsigned int IBO[5];
+	ray.initialize();
+	ray.loadData(rayVertices);
+	ray.setPosition(glm::vec3(0.0f, 0.0f, 0.0f));
 
-	glGenBuffers(5, VBO);
-	glGenBuffers(5, IBO);
+	//unsigned int VBO[5];
+	//unsigned int IBO[5];
 
-	glGenVertexArrays(5, VAO);
+	//glGenBuffers(5, VBO);
+	//glGenBuffers(5, IBO);
 
-	// Initialize first VAO
-	glBindVertexArray(VAO[0]);
+	//glGenVertexArrays(5, VAO);
 
-	// Bind vertex data.
-	glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices1), vertices1, GL_STATIC_DRAW);
+	//// Initialize first VAO
+	//glBindVertexArray(VAO[0]);
 
-	// Bind index data.
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO[0]);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1), indices1, GL_STATIC_DRAW);
+	//// Bind vertex data.
+	//glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);
+	//glBufferData(GL_ARRAY_BUFFER, sizeof(vertices1), vertices1, GL_STATIC_DRAW);
 
-	// Location attribute.
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 6, (void*)0);
-	glEnableVertexAttribArray(0);
+	//// Bind index data.
+	//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO[0]);
+	//glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1), indices1, GL_STATIC_DRAW);
 
-	// Color attribute.
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 6, (void*)(sizeof(float) * 3));
-	glEnableVertexAttribArray(1);
+	//// Location attribute.
+	//glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 6, (void*)0);
+	//glEnableVertexAttribArray(0);
 
-	// Initialize second VAO
-	glBindVertexArray(VAO[1]);
+	//// Color attribute.
+	//glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 6, (void*)(sizeof(float) * 3));
+	//glEnableVertexAttribArray(1);
 
-	glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
+	//// Initialize second VAO
+	//glBindVertexArray(VAO[1]);
 
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices2), vertices2, GL_STATIC_DRAW);
+	//glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO[1]);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2), indices2, GL_STATIC_DRAW);
+	//glBufferData(GL_ARRAY_BUFFER, sizeof(vertices2), vertices2, GL_STATIC_DRAW);
 
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, (void*)0);
-	glEnableVertexAttribArray(0);
+	//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO[1]);
+	//glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2), indices2, GL_STATIC_DRAW);
 
-	// Initialize third VAO
-	glBindVertexArray(VAO[2]);
+	//glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, (void*)0);
+	//glEnableVertexAttribArray(0);
 
-	glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
+	//// Initialize third VAO
+	//glBindVertexArray(VAO[2]);
 
-	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW);
+	//glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO[2]);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+	//glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW);
 
-	// Position attribute.
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)0);
-	glEnableVertexAttribArray(0);
+	//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO[2]);
+	//glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
-	// TexCoord attribute.
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)(sizeof(float) * 3));
-	glEnableVertexAttribArray(1);
+	//// Position attribute.
+	//glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)0);
+	//glEnableVertexAttribArray(0);
+
+	//// TexCoord attribute.
+	//glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)(sizeof(float) * 3));
+	//glEnableVertexAttribArray(1);
 }
 
 void Application::prepareResources()
@@ -551,26 +589,6 @@ void Application::processInput(GLFWwindow* window)
 	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
 	{
 		camera.up(-timeSlice);
-	}
-
-	if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
-	{
-		//camera.setPitch(-10.0f);
-	}
-
-	if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
-	{
-		//camera.setPitch(10.0f);
-	}
-
-	if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
-	{
-		//camera.setYaw(10.0f);
-	}
-
-	if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
-	{
-		//camera.setYaw(-10.0f);
 	}
 }
 
@@ -647,8 +665,8 @@ void Application::internalKeyCallback(GLFWwindow* window, int key, int scancode,
 
 void Application::internalMouseMoveCallback(GLFWwindow* window, double xPos, double yPos)
 {
-	double xOffset = xPos - lastX;
-	double yOffset = lastY - yPos; // reversed since y - coordinates go from bottom to top
+	xOffset = xPos - lastX;
+	yOffset = lastY - yPos; // reversed since y - coordinates go from bottom to top
 
 	lastX = xPos;
 	lastY = yPos;
@@ -661,8 +679,8 @@ void Application::internalMouseMoveCallback(GLFWwindow* window, double xPos, dou
 
 	if (cameraPan)
 	{
-		camera.right(xOffset);
-		camera.up(yOffset);
+		camera.right(xOffset * timeSlice * panMoveRate);
+		camera.up(yOffset * timeSlice * panMoveRate);
 	}
 }
 
@@ -671,27 +689,46 @@ void Application::internalMouseButtonCallback(GLFWwindow* window, int button, in
 	// 0 - 鼠标左键
 	// 1 - 鼠标右键
 	// 2 - 鼠标中键
-	if (action == GLFW_PRESS && button == GLFW_KEY_RIGHT)
+	if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_2)
 	{
 		cameraControl = true;
 	}
 
-	if (action == GLFW_RELEASE &&        button == 1)
+	if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_2)
 	{
 		cameraControl = false;
 	}
 
-	if (action == GLFW_PRESS && button == 2)
+	if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_3)
 	{                           
 		cameraPan = true;            
 	}        
 
-	if (action == GLFW_RELEASE && button == 2)
+	if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_3)
 	{
 		cameraPan = false;
 	}
 
 	glfwGetCursorPos(window, &lastX, &lastY);
+
+	glm::mat4 viewMatrix = camera.viewMatrix();
+
+	glm::mat4 inverseWorldView = glm::inverse(viewMatrix * worldMatrix);
+
+	glm::mat4 projectMatrix = camera.projectionMatrix();
+
+	glm::vec4 temp;
+
+	temp.x = (((2.0f * lastX) / width) - 1.0f) / projectMatrix[0][0];
+	temp.y = -(((2.0f * lastY) / height) - 1.0f) / projectMatrix[1][1];
+	temp.z = 1.0f;
+	temp.w = 1.0f;
+
+	temp = inverseWorldView * temp;
+
+	glm::vec3 rayDir(temp.x, temp.y, temp.z);
+
+	glm::vec3 rayOrigin(inverseWorldView[3][0], inverseWorldView[3][1], inverseWorldView[3][2]);
 
 	ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
 }

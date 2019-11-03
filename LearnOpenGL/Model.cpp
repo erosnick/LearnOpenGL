@@ -53,13 +53,13 @@ void Model::loadData(const std::vector<VertexNormal>& inVertices)
 	normalVertices = inVertices;
 
 	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	glBufferData(GL_ARRAY_BUFFER, normalVertices.size() * sizeof(Vertex), normalVertices.data(), GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, normalVertices.size() * sizeof(VertexNormal), normalVertices.data(), GL_STATIC_DRAW);
 
 	// Position attribute.
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 6, (void*)0);
 	glEnableVertexAttribArray(0);
 
-	// TexCoord attribute.
+	// Normal attribute.
 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 6, (void*)(sizeof(float) * 3));
 	glEnableVertexAttribArray(1);
 }
