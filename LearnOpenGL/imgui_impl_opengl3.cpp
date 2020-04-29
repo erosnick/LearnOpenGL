@@ -471,7 +471,7 @@ bool    ImGui_ImplOpenGL3_CreateDeviceObjects()
 #endif
 
     // Parse GLSL version string
-    int glsl_version = 130;
+    int glsl_version = 330;
     sscanf(g_GlslVersionString, "#version %d", &glsl_version);
 
     const GLchar* vertex_shader_glsl_120 =
