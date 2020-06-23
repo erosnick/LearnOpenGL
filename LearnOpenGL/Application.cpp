@@ -4,6 +4,8 @@
 #include <functional>
 #include <vector>
 
+#define IMGUI_IMPL_OPENGL_LOADER_GLAD
+
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
@@ -202,7 +204,7 @@ void Application::initImGui()
 
 	// Setup platform/Renderer bindings.
 	const char* glsl_version = "#version 130";
-	ImGui_ImplGlfw_InitForOpenGL(appWindow, false);
+	ImGui_ImplGlfw_InitForOpenGL(appWindow, true);
 	ImGui_ImplOpenGL3_Init(glsl_version);
 
 	// Load Fonts
