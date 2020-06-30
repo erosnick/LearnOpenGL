@@ -77,7 +77,6 @@ void Application::run()
 
 		renderImGui();
 
-
 		glfwSwapBuffers(appWindow);
 
 		// Poll and handle events (inputs, window resize, etc.)
@@ -472,6 +471,8 @@ void Application::initVBO()
 	ray.initialize();
 	ray.loadData(rayVertices);
 	ray.setPosition(glm::vec3(0.0f, 0.0f, 0.0f));
+
+	glEnableClientState(GL_VERTEX_ARRAY);
 
 	//unsigned int VBO[5];
 	//unsigned int IBO[5];
