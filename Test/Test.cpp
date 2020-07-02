@@ -14,30 +14,17 @@
 using namespace std;
 using namespace cl;
 
-void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+void framebufferSzeCallback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
 
 // settings
 const unsigned int WINDOW_WIDTH = 1280;
 const unsigned int WINDOW_HEIGHT = 720;
 
-bool buffer_reset;
+bool bufferReset;
 InteractiveCamera* interactiveCamera;
 
-const char* vertexShaderSource = "#version 330 core\n"
-"layout (location = 0) in vec3 aPos;\n"
-"void main()\n"
-"{\n"
-"   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
-"}\0";
-const char* fragmentShaderSource = "#version 330 core\n"
-"out vec4 FragColor;\n"
-"void main()\n"
-"{\n"
-"   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
-"}\n\0";
-
-const int sphere_count = 4;
+const int sphereCount = 4;
 
 // OpenGL vertex buffer object
 GLuint vbo;
@@ -48,20 +35,18 @@ CommandQueue queue;
 Kernel kernel;
 Context context;
 Program program;
-Buffer cl_output;
-Buffer cl_spheres;
-Buffer cl_camera;
-Buffer cl_accumbuffer;
-BufferGL cl_vbo;
-vector<Memory> cl_vbos;
+Buffer clOutput;
+Buffer clSpheres;
+Buffer clCamera;
+Buffer clAccumulateBuffer;
+BufferGL clVBO;
+vector<Memory> clVBOs;
 
 // image buffer (not needed with real-time viewport)
-// cl_float4* cpu_output;
-cl_int err;
-unsigned int framenumber = 0;
+unsigned int frameNumber = 0;
 
-Camera* hostRendercam = NULL;
-Sphere cpu_spheres[sphere_count];
+Camera* hostRenderCamera = NULL;
+Sphere cpuSpheres[sphereCount];
 
 double lastX = 0;
 double lastY = 0;
@@ -246,33 +231,33 @@ void initOpenCL()
 
 // #define float3(x, y, z) {{x, y, z}}  // macro to replace ugly initializer braces
 
-void initScene(Sphere* cpu_spheres) {
+void initScene(Sphere* cpuSpheres) {
 
 	// floor
-	cpu_spheres[0].radius = 200.0f;
-	cpu_spheres[0].position = Vector3Df(0.0f, -200.4f, 0.0f);
-	cpu_spheres[0].color = Vector3Df(0.9f, 0.3f, 0.0f);
-	cpu_spheres[0].emission = Vector3Df(0.0f, 0.0f, 0.0f);
+	cpuSpheres[0].radius = 200.0f;
+	cpuSpheres[0].position = Vector3Df(0.0f, -200.4f, 0.0f);
+	cpuSpheres[0].color = Vector3Df(0.9f, 0.3f, 0.0f);
+	cpuSpheres[0].emission = Vector3Df(0.0f, 0.0f, 0.0f);
 
 	// left sphere
-	cpu_spheres[1].radius = 0.16f;
-	cpu_spheres[1].position = Vector3Df(-0.25f, -0.24f, -0.1f);
-	cpu_spheres[1].color = Vector3Df(0.9f, 0.8f, 0.7f);
-	cpu_spheres[1].emission = Vector3Df(0.0f, 0.0f, 0.0f);
+	cpuSpheres[1].radius = 0.16f;
+	cpuSpheres[1].position = Vector3Df(-0.25f, -0.24f, -0.1f);
+	cpuSpheres[1].color = Vector3Df(0.9f, 0.8f, 0.7f);
+	cpuSpheres[1].emission = Vector3Df(0.0f, 0.0f, 0.0f);
 
 	// right sphere
-	cpu_spheres[2].radius = 0.16f;
-	cpu_spheres[2].position = Vector3Df(0.25f, -0.24f, 0.1f);
-	cpu_spheres[2].color = Vector3Df(0.9f, 0.8f, 0.7f);
-	cpu_spheres[2].emission = Vector3Df(0.0f, 0.0f, 0.0f);
+	cpuSpheres[2].radius = 0.16f;
+	cpuSpheres[2].position = Vector3Df(0.25f, -0.24f, 0.1f);
+	cpuSpheres[2].color = Vector3Df(0.9f, 0.8f, 0.7f);
+	cpuSpheres[2].emission = Vector3Df(0.0f, 0.0f, 0.0f);
 
 	float lightIntensity = 2.0f;
 
 	// lightsource
-	cpu_spheres[3].radius = 1.0f;
-	cpu_spheres[3].position = Vector3Df(0.0f, 1.36f, 0.0f);
-	cpu_spheres[3].color = Vector3Df(0.0f, 0.0f, 0.0f);
-	cpu_spheres[3].emission = Vector3Df(0.9f, 0.8f, 0.6f) * lightIntensity;
+	cpuSpheres[3].radius = 1.0f;
+	cpuSpheres[3].position = Vector3Df(0.0f, 1.36f, 0.0f);
+	cpuSpheres[3].color = Vector3Df(0.0f, 0.0f, 0.0f);
+	cpuSpheres[3].emission = Vector3Df(0.9f, 0.8f, 0.6f) * lightIntensity;
 }
 
 // hash function to calculate new seed for each frame
@@ -297,18 +282,18 @@ void initCLKernel() {
 	kernel = Kernel(program, "render_kernel");
 
 	// specify OpenCL kernel arguments
-	//kernel.setArg(0, cl_output);
-	kernel.setArg(0, cl_spheres);
+	//kernel.setArg(0, clOutput);
+	kernel.setArg(0, clSpheres);
 	kernel.setArg(1, WINDOW_WIDTH);
 	kernel.setArg(2, WINDOW_HEIGHT);
-	kernel.setArg(3, sphere_count);
-	kernel.setArg(4, cl_vbo);
-	kernel.setArg(5, framenumber);
-	kernel.setArg(6, cl_camera);
+	kernel.setArg(3, sphereCount);
+	kernel.setArg(4, clVBO);
+	kernel.setArg(5, frameNumber);
+	kernel.setArg(6, clCamera);
 	kernel.setArg(7, rand());
 	kernel.setArg(8, rand());
-	kernel.setArg(9, cl_accumbuffer);
-	kernel.setArg(10, WangHash(framenumber));
+	kernel.setArg(9, clAccumulateBuffer);
+	kernel.setArg(10, WangHash(frameNumber));
 }
 
 void runKernel() {
@@ -325,7 +310,7 @@ void runKernel() {
 	glFinish();
 
 	//this passes in the vector of VBO buffer objects 
-	queue.enqueueAcquireGLObjects(&cl_vbos);
+	queue.enqueueAcquireGLObjects(&clVBOs);
 	queue.finish();
 
 	// launch the kernel
@@ -333,37 +318,37 @@ void runKernel() {
 	queue.finish();
 
 	//Release the VBOs so OpenGL can play with them
-	queue.enqueueReleaseGLObjects(&cl_vbos);
+	queue.enqueueReleaseGLObjects(&clVBOs);
 	queue.finish();
 }
 
 
 void render() {
 
-	//cpu_spheres[1].position.y += 0.01f;
-	queue.enqueueWriteBuffer(cl_spheres, CL_TRUE, 0, sphere_count * sizeof(Sphere), cpu_spheres);
+	//cpuSpheres[1].position.y += 0.01f;
+	queue.enqueueWriteBuffer(clSpheres, CL_TRUE, 0, sphereCount * sizeof(Sphere), cpuSpheres);
 
-	if (buffer_reset) {
+	if (bufferReset) {
 		float arg = 0;
-		queue.enqueueFillBuffer(cl_accumbuffer, arg, 0, WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(cl_float3));
-		framenumber = 0;
+		queue.enqueueFillBuffer(clAccumulateBuffer, arg, 0, WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(cl_float3));
+		frameNumber = 0;
 	}
 
-	buffer_reset = false;
-	framenumber++;
+	bufferReset = false;
+	frameNumber++;
 
 	// build a new camera for each frame on the CPU
-	interactiveCamera->buildRenderCamera(hostRendercam);
+	interactiveCamera->buildRenderCamera(hostRenderCamera);
 	// copy the host camera to a OpenCL camera
-	queue.enqueueWriteBuffer(cl_camera, CL_TRUE, 0, sizeof(Camera), hostRendercam);
+	queue.enqueueWriteBuffer(clCamera, CL_TRUE, 0, sizeof(Camera), hostRenderCamera);
 	queue.finish();
 
-	kernel.setArg(0, cl_spheres);  //  works even when commented out
-	kernel.setArg(5, framenumber);
-	kernel.setArg(6, cl_camera);
+	kernel.setArg(0, clSpheres);  //  works even when commented out
+	kernel.setArg(5, frameNumber);
+	kernel.setArg(6, clCamera);
 	kernel.setArg(7, rand());
 	kernel.setArg(8, rand());
-	kernel.setArg(10, WangHash(framenumber));
+	kernel.setArg(10, WangHash(frameNumber));
 
 	runKernel();
 
@@ -385,22 +370,22 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 	switch (key) {
 
 		case(GLFW_KEY_ESCAPE): exit(0);
-		case(GLFW_KEY_SPACE): initCamera(); buffer_reset = true; break;
-		case(GLFW_KEY_A): interactiveCamera->strafe(-0.05f); buffer_reset = true; break;
-		case(GLFW_KEY_D): interactiveCamera->strafe(0.05f); buffer_reset = true; break;
-		case(GLFW_KEY_R): interactiveCamera->changeAltitude(0.05f); buffer_reset = true; break;
-		case(GLFW_KEY_F): interactiveCamera->changeAltitude(-0.05f); buffer_reset = true; break;
-		case(GLFW_KEY_W): interactiveCamera->goForward(0.05f); buffer_reset = true; break;
-		case(GLFW_KEY_S): interactiveCamera->goForward(-0.05f); buffer_reset = true; break;
-		case(GLFW_KEY_G): interactiveCamera->changeApertureDiameter(0.1); buffer_reset = true; break;
-		case(GLFW_KEY_H): interactiveCamera->changeApertureDiameter(-0.1); buffer_reset = true; break;
-		case(GLFW_KEY_T): interactiveCamera->changeFocalDistance(0.1); buffer_reset = true; break;
-		case(GLFW_KEY_Y): interactiveCamera->changeFocalDistance(-0.1); buffer_reset = true; break;
+		case(GLFW_KEY_SPACE): initCamera(); bufferReset = true; break;
+		case(GLFW_KEY_A): interactiveCamera->strafe(-0.05f); bufferReset = true; break;
+		case(GLFW_KEY_D): interactiveCamera->strafe(0.05f); bufferReset = true; break;
+		case(GLFW_KEY_R): interactiveCamera->changeAltitude(0.05f); bufferReset = true; break;
+		case(GLFW_KEY_F): interactiveCamera->changeAltitude(-0.05f); bufferReset = true; break;
+		case(GLFW_KEY_W): interactiveCamera->goForward(0.05f); bufferReset = true; break;
+		case(GLFW_KEY_S): interactiveCamera->goForward(-0.05f); bufferReset = true; break;
+		case(GLFW_KEY_G): interactiveCamera->changeApertureDiameter(0.1); bufferReset = true; break;
+		case(GLFW_KEY_H): interactiveCamera->changeApertureDiameter(-0.1); bufferReset = true; break;
+		case(GLFW_KEY_T): interactiveCamera->changeFocalDistance(0.1); bufferReset = true; break;
+		case(GLFW_KEY_Y): interactiveCamera->changeFocalDistance(-0.1); bufferReset = true; break;
 
-		case GLFW_KEY_LEFT: interactiveCamera->changeYaw(0.02f); buffer_reset = true; break;
-		case GLFW_KEY_RIGHT: interactiveCamera->changeYaw(-0.02f); buffer_reset = true; break;
-		case GLFW_KEY_UP: interactiveCamera->changePitch(0.02f); buffer_reset = true; break;
-		case GLFW_KEY_DOWN: interactiveCamera->changePitch(-0.02f); buffer_reset = true; break;
+		case GLFW_KEY_LEFT: interactiveCamera->changeYaw(0.02f); bufferReset = true; break;
+		case GLFW_KEY_RIGHT: interactiveCamera->changeYaw(-0.02f); bufferReset = true; break;
+		case GLFW_KEY_UP: interactiveCamera->changePitch(0.02f); bufferReset = true; break;
+		case GLFW_KEY_DOWN: interactiveCamera->changePitch(-0.02f); bufferReset = true; break;
 	}
 }
 
@@ -431,7 +416,7 @@ void mouseMoveCallback(GLFWwindow* window, double xPos, double yPos)
 		
 		if (mouseButton != -1)
 		{
-			buffer_reset = true;
+			bufferReset = true;
 		}
 	}
 }
@@ -501,7 +486,7 @@ int main()
         return -1;
     }
     glfwMakeContextCurrent(window);
-    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    glfwSetFramebufferSizeCallback(window, framebufferSzeCallback);
 
 	glfwSetKeyCallback(window, keyCallback);
 	glfwSetMouseButtonCallback(window, mouseButtonCallback);
@@ -527,26 +512,26 @@ int main()
 	glFinish();
 
 	// initialise scene
-	initScene(cpu_spheres);
+	initScene(cpuSpheres);
 
-	cl_spheres = Buffer(context, CL_MEM_READ_ONLY, sphere_count * sizeof(Sphere));
-	queue.enqueueWriteBuffer(cl_spheres, CL_TRUE, 0, sphere_count * sizeof(Sphere), cpu_spheres);
+	clSpheres = Buffer(context, CL_MEM_READ_ONLY, sphereCount * sizeof(Sphere));
+	queue.enqueueWriteBuffer(clSpheres, CL_TRUE, 0, sphereCount * sizeof(Sphere), cpuSpheres);
 
 	// initialise an interactive camera on the CPU side
 	initCamera();
 	// create a CPU camera
-	hostRendercam = new Camera();
-	interactiveCamera->buildRenderCamera(hostRendercam);
+	hostRenderCamera = new Camera();
+	interactiveCamera->buildRenderCamera(hostRenderCamera);
 
-	cl_camera = Buffer(context, CL_MEM_READ_ONLY, sizeof(Camera));
-	queue.enqueueWriteBuffer(cl_camera, CL_TRUE, 0, sizeof(Camera), hostRendercam);
+	clCamera = Buffer(context, CL_MEM_READ_ONLY, sizeof(Camera));
+	queue.enqueueWriteBuffer(clCamera, CL_TRUE, 0, sizeof(Camera), hostRenderCamera);
 
 	// create OpenCL buffer from OpenGL vertex buffer object
-	cl_vbo = BufferGL(context, CL_MEM_WRITE_ONLY, vbo);
-	cl_vbos.push_back(cl_vbo);
+	clVBO = BufferGL(context, CL_MEM_WRITE_ONLY, vbo);
+	clVBOs.push_back(clVBO);
 
 	// reserve memory buffer on OpenCL device to hold image buffer for accumulated samples
-	cl_accumbuffer = Buffer(context, CL_MEM_WRITE_ONLY, WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(cl_float3));
+	clAccumulateBuffer = Buffer(context, CL_MEM_WRITE_ONLY, WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(cl_float3));
 
 	// intitialise the kernel
 	initCLKernel();
@@ -598,7 +583,7 @@ void processInput(GLFWwindow* window)
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
 // ---------------------------------------------------------------------------------------------
-void framebuffer_size_callback(GLFWwindow* window, int width, int height)
+void framebufferSzeCallback(GLFWwindow* window, int width, int height)
 {
     // make sure the viewport matches the new window dimensions; note that width and 
     // height will be significantly larger than specified on retina displays.
