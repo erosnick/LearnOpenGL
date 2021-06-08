@@ -105,7 +105,30 @@ void Camera::up(float delta)
 
 glm::mat4& Camera::viewMatrix()
 {
-	view = glm::lookAt(cameraPosition, cameraPosition + cameraFront, cameraUp);
+	// view = glm::lookAt(cameraPosition, cameraPosition + cameraFront, cameraUp);
+
+	glm::vec3 eye = glm::vec3(0.0f, 0.0f, 5.0f);
+	glm::vec3 target = glm::vec3(0.0f, 0.0f, -1.0f);
+	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+
+	auto forward = glm::normalize(target - eye);
+
+	auto right = glm::normalize(glm::cross(forward, up));
+
+	up = glm::cross(right, forward);
+
+	view[0][0] = right.x;
+	view[1][0] = right.y;
+	view[2][0] = right.z;
+	view[0][1] = up.x;
+	view[1][1] = up.y;
+	view[2][1] = up.z;
+	view[0][2] = -forward.x;
+	view[1][2] = -forward.y;
+	view[2][2] = -forward.z;
+	view[3][0] = -glm::dot(right, eye);
+	view[3][1] = -glm::dot(up, eye);
+	view[3][2] =  glm::dot(forward, eye);
 
 	return view;
 }

@@ -42,7 +42,7 @@ private:
 	glm::vec3 calculateRotation(float pitch, float yaw);
 
 	float aspectRatio;
-	float fov = 45.0f;
+	float fov = glm::radians(45.0f);
 	float nearZ = 0.1f;
 	float farZ = 100.0f;
 

@@ -1,0 +1,4 @@
+[{
+    "key": "ctrl+shift+t",
+    "command": "shellLauncher.launch"
+}]
