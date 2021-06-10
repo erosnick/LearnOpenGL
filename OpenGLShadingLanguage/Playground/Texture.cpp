@@ -3,10 +3,13 @@
 #include <imgui/stb_image.h>
 #include <memory>
 #include <iostream>
+#include <filesystem>
 
 uint32_t Texture::activeIndex = 0;
 
-Texture::Texture(int32_t inWidth, int32_t inHeight) {
+std::string Texture::suffixes[] = { "posx", "negx", "posy", "negy", "posz", "negz" };
+
+Texture::Texture(const std::string& name, int32_t inWidth, int32_t inHeight) {
 
     width = inWidth;
     height = inHeight;
@@ -28,25 +31,28 @@ Texture::Texture(int32_t inWidth, int32_t inHeight) {
 }
 
 void Texture::load(const std::string& fileName, int32_t wrapMode) {
+    if (!std::filesystem::exists(fileName)) {
+        std::cout << "File " + fileName << " doesn't exists.\n";
+        return;
+    }
+
     int32_t bpp = 0;
 
     uint8_t* data = stbi_load(fileName.c_str(), &width, &height, &bpp, 4);
 
-    if (data != nullptr) {
-        glActiveTexture(GL_TEXTURE0 + activeIndex++);
+    glActiveTexture(GL_TEXTURE0 + activeIndex++);
 
-        glGenTextures(1, &id);
-        glBindTexture(GL_TEXTURE_2D, id);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapMode);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapMode);
+    glGenTextures(1, &id);
+    glBindTexture(GL_TEXTURE_2D, id);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapMode);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapMode);
 
-        stbi_image_free(data);
-    }
+    stbi_image_free(data);
 }
 
 void Texture::loadCubeMap(const std::string& baseName, int32_t wrapMode, bool hdr) {
@@ -54,8 +60,6 @@ void Texture::loadCubeMap(const std::string& baseName, int32_t wrapMode, bool hd
 
     glGenTextures(1, &id);
     glBindTexture(GL_TEXTURE_CUBE_MAP, id);
-
-    std::string suffixes[] = { "posx", "negx", "posy", "negy", "posz", "negz" };
 
     uint32_t targets[] = {
         GL_TEXTURE_CUBE_MAP_POSITIVE_X,
@@ -79,13 +83,16 @@ void Texture::loadCubeMap(const std::string& baseName, int32_t wrapMode, bool hd
 
         std::string textureName = std::string(baseName) + "_" + suffixes[i] + ext;
 
+        if (!std::filesystem::exists(textureName)) {
+            std::cout << "Texture " + textureName + " not found.\n";
+            return;
+        }
+
         uint8_t* data = stbi_load(textureName.c_str(), &width, &height, &bpp, 4);
 
-        if (data != nullptr) {
-            glTexImage2D(targets[i], 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+        glTexImage2D(targets[i], 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 
-            stbi_image_free(data);
-        }
+        stbi_image_free(data);
     }
 
     glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);

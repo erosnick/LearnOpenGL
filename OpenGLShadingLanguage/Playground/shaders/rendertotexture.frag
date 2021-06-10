@@ -31,11 +31,14 @@ struct Material{
 	vec3 Ka;
 	vec3 Kd;
 	vec3 Ks;
-	float shininess;
-	float reflectionFactor;
-	float refractionFactor;
+    vec3 Ke;
+    float shininess;
+    float reflectionFactor;
+    float refractionFactor;
     // relative index of refraction(n1/n2)
+    float ior;
     float eta;
+    bool hasNormalMap;
 };
 
 struct Fog {
@@ -62,6 +65,8 @@ uniform sampler2D renderTexture;
 uniform sampler2D textures[2];
 
 uniform bool drawSkyBox = false;
+
+uniform bool showProjector = false;
 
 float computeAttenuation(Light light, float distance) {
 	return 1.0 / (light.Kc + light.Kl * distance + light.Kq * pow(distance, 2.0));
@@ -129,15 +134,17 @@ void main() {
 
 	vec4 albedo = texture(textures[0], texcoord);
 
-	vec3 normal = texture(textures[1], texcoord).xyz;
+	vec3 normal = vec3(0);
+	
+	normal = normalize(worldNormal);
 
-	normal = normal * 2.0 - 1.0;
+	if (material.hasNormalMap) {
+		normal = texture(textures[1], texcoord).xyz;
+		normal = normal * 2.0 - 1.0;
+		normal = normalize(vec3(dot(tangentToWorld1, normal), dot(tangentToWorld2, normal), dot(tangentToWorld3, normal)));
+	}
 
-	normal = normalize(vec3(dot(tangentToWorld1, normal), dot(tangentToWorld2, normal), dot(tangentToWorld3, normal)));
-
-	// vec3 normal = normalize(worldNormal);
-
-	vec3 ambient = albedo.rgb * material.Ka;
+	vec3 ambient = material.Ka;
 
 	if (!gl_FrontFacing) {
 		normal = -normal;
@@ -156,15 +163,15 @@ void main() {
 	fogFactor = computeExponentFog(fog, distance, 2.0);
 
 	// vec3 finalColor = mix(fog.color.rgb, light1 + light2 + ambient, fogFactor);
-	vec3 finalColor = mix(fog.color.rgb, light3 + ambient, fogFactor);
+	vec3 finalColor = mix(fog.color.rgb, light2 + ambient, fogFactor);
 
 	vec4 reflectionColor = texture(cubeMap, reflectionDirection);
 	vec4 refractionColor = texture(cubeMap, refractionDirection);
 
 	vec4 projectionTextureColor = vec4(0.0);
 	
-	if (projectorTexcoord.z > 0.0) {
-		projectionTextureColor = textureProj(projection,projectorTexcoord) * 0.5;
+	if (showProjector && projectorTexcoord.z > 0.0) {
+		projectionTextureColor = textureProj(projection, projectorTexcoord) * 0.5;
 	}
 
 	if (drawSkyBox) {
@@ -172,8 +179,8 @@ void main() {
 		// fragColor = vec4(reflectionDirection, 1.0);
 	}
 	else {
-		fragColor = mix(mix(vec4(finalColor + projectionTextureColor.rgb, 1.0), reflectionColor, material.reflectionFactor), refractionColor, material.refractionFactor);
+		// fragColor = mix(mix(vec4(finalColor + projectionTextureColor.rgb, 1.0), reflectionColor, material.reflectionFactor), refractionColor, material.refractionFactor);
 		// vec3 color = projectionTextureColor.z > 0.0 ? projectionTextureColor.rgb :vec3(0.0);
-		// fragColor = vec4(color, 1.0);
+		fragColor = vec4(albedo.rgb * material.Kd, 1.0);
 	}
 }

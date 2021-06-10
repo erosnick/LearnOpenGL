@@ -47,14 +47,13 @@ namespace std {
 //    };
 //}
 
-class Model {
+class Mesh {
 public:
-    Model() {
-        position = glm::vec3(0.0f);
-        transform = glm::mat4(1.0f);
+    Mesh() {
+
     }
 
-    ~Model() {
+    ~Mesh() {
         glDeleteBuffers(1, &vbo);
         glDeleteBuffers(1, &ibo);
         glDeleteBuffers(1, &vao);
@@ -76,63 +75,8 @@ public:
         return sizeof(uint32_t) * indices.size();
     }
 
-    uint32_t getElementCount() const {
-        return static_cast<uint32_t>(indices.size());
-    }
-
     uint32_t getTriangleCount() const {
         return static_cast<uint32_t>(vertices.size() / 3);
-    }
-
-    void scale(const glm::vec3& factor) {
-        transform = glm::scale(transform, factor);
-    }
-
-    void translate(const glm::vec3& offset) {
-        transform = glm::translate(transform, offset);
-    }
-
-    void rotate(float angle, const glm::vec3& axis) {
-        transform = glm::rotate(transform, glm::radians(angle), axis);
-    }
-
-    void setPosition(const glm::vec3& inPosition) {
-        position = inPosition;
-        transform[3][0] = inPosition.x;
-        transform[3][1] = inPosition.y;
-        transform[3][2] = inPosition.z;
-    }
-
-    glm::vec3 getPosition() const {
-        return position;
-    }
-
-    glm::mat4 getTransform() const {
-        return transform;
-    }
-
-    std::vector<Vertex> getVertices() const {
-        return vertices;
-    }
-
-    const Vertex* getVerticesData() const {
-        return vertices.data();
-    }
-
-    std::vector<uint32_t> getIndices() const {
-        return indices;
-    }
-
-    const uint32_t* getIndicesData() const {
-        return indices.data();
-    }
-
-    void computeTangentSpace();
-
-    void prepareDraw();
-
-    void use() {
-        glBindVertexArray(vao);
     }
 
     void addTexture(const std::shared_ptr<Texture>& texture) {
@@ -169,15 +113,42 @@ public:
         return name;
     }
 
-private:
+    std::vector<Vertex> getVertices() const {
+        return vertices;
+    }
 
+    size_t getVertexCount() const {
+        return vertices.size();
+    }
+
+    const Vertex* getVerticesData() const {
+        return vertices.data();
+    }
+
+    std::vector<uint32_t> getIndices() const {
+        return indices;
+    }
+
+    size_t getIndexCount() const {
+        return indices.size();
+    }
+
+    const uint32_t* getIndicesData() const {
+        return indices.data();
+    }
+
+    void computeTangentSpace();
+
+    void prepareDraw();
+
+    void use() {
+        glBindVertexArray(vao);
+    }
+private:
     std::string name;
 
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
-
-    glm::vec3 position;
-    glm::mat4 transform;
 
     uint32_t vbo = -1;
     uint32_t ibo = -1;
@@ -185,4 +156,110 @@ private:
 
     std::shared_ptr<Material> material;
     std::vector<std::shared_ptr<Texture>> textures;
+};
+
+class Model {
+public:
+    Model() {
+        position = glm::vec3(0.0f);
+        transform = glm::mat4(1.0f);
+    }
+
+    ~Model() {
+    }
+
+    uint32_t getTriangleCount() const {
+
+    }
+
+    void scale(const glm::vec3& factor) {
+        transform = glm::scale(transform, factor);
+    }
+
+    void translate(const glm::vec3& offset) {
+        transform = glm::translate(transform, offset);
+    }
+
+    void rotate(float angle, const glm::vec3& axis) {
+        transform = glm::rotate(transform, glm::radians(angle), axis);
+    }
+
+    void setPosition(const glm::vec3& inPosition) {
+        position = inPosition;
+        transform[3][0] = inPosition.x;
+        transform[3][1] = inPosition.y;
+        transform[3][2] = inPosition.z;
+    }
+
+    glm::vec3 getPosition() const {
+        return position;
+    }
+
+    glm::mat4 getTransform() const {
+        return transform;
+    }
+
+    void computeTangentSpace();
+
+    void prepareDraw();
+
+    void addTexture(const std::shared_ptr<Texture>& texture) {
+        textures.push_back(texture);
+    }
+
+    int32_t getTextureIndex(uint32_t index) const {
+        if (index >= textures.size()) {
+            return 0;
+        }
+
+        auto texture = textures[index];
+
+        if (texture) {
+            return texture->getTextureIndex();
+        }
+
+        return 0;
+    }
+
+    void setMaterial(const std::shared_ptr<Material>& inMaterial) {
+        material = inMaterial;
+    }
+
+    const std::shared_ptr<Material>& getMaterial() const {
+        return material;
+    }
+
+    void setName(const std::string& inName) {
+        name = inName;
+    }
+
+    const std::string& getName() const {
+        return name;
+    }
+
+    void addMesh(const std::shared_ptr<Mesh>& mesh) {
+        meshes.push_back(mesh);
+        triangleCount += mesh->getTriangleCount();
+    }
+
+    const std::vector<std::shared_ptr<Mesh>>& getMeshes() const {
+        return meshes;
+    }
+
+    size_t getMeshCount() const {
+        return meshes.size();
+    }
+private:
+
+    std::string name;
+
+    glm::vec3 position;
+    glm::mat4 transform;
+
+    std::shared_ptr<Material> material;
+    std::vector<std::shared_ptr<Texture>> textures;
+
+    std::vector <std::shared_ptr<Mesh>> meshes;
+
+    uint32_t triangleCount = 0;
 };

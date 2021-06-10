@@ -1,11 +1,22 @@
 #include "Model.h"
 
 void Model::computeTangentSpace() {
+    for (auto& mesh : meshes) {
+        mesh->computeTangentSpace();
+    }
+}
 
+void Model::prepareDraw() {
+    for (auto& mesh : meshes) {
+        mesh->prepareDraw();
+    }
+}
+
+void Mesh::computeTangentSpace() {
     std::vector<glm::vec3 > tangent;
     std::vector<glm::vec3 > binormal;
 
-    for (unsigned int i = 0; i < getElementCount(); i += 3) {
+    for (unsigned int i = 0; i < getIndexCount(); i += 3) {
 
         glm::vec3 vertex0 = vertices.at(indices.at(i + 0)).position;
         glm::vec3 vertex1 = vertices.at(indices.at(i + 1)).position;
@@ -50,7 +61,7 @@ void Model::computeTangentSpace() {
     }
 }
 
-void Model::prepareDraw() {
+void Mesh::prepareDraw() {
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
 

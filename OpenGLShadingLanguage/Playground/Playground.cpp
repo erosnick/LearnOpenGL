@@ -6,6 +6,7 @@
 #include <fstream>
 #include <unordered_map>
 #include <memory>
+#include <filesystem>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -65,7 +66,7 @@ float angle = 0.0f;
 bool showDemoWindow = true;
 bool showAnotherWindow = false;
 bool showOpenMenuItem = true;
-
+bool showProjector = false;
 ImVec4 clearColor = ImVec4(0.392f, 0.584f, 0.929f, 1.0f);
 ImVec4 pointLightColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 ImVec4 directionaLightColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -107,7 +108,57 @@ glm::mat4 projectorTransform = glm::mat4(1.0f);
 
 uint32_t fbo;
 std::shared_ptr<Texture> renderTexture;
+std::shared_ptr<Texture> defaultAlbedo;
 uint32_t depthBuffer;
+
+const std::shared_ptr<Texture>& getTexture(const std::string& name);
+std::shared_ptr<Model> loadModel(const std::string& fileName, const std::string& inName = "", const std::string& materialPath = "./resources/models", const std::string& texturePath = "./resources/textures/");
+
+void APIENTRY glDebugOutput(GLenum source,
+    GLenum type,
+    GLuint id,
+    GLenum severity,
+    GLsizei length,
+    const GLchar* message,
+    const void* userParam) {
+    // 忽略一些不重要的错误/警告代码
+    if (id == 131169 || id == 131185 || id == 131218 || id == 131204) return;
+
+    std::cout << "---------------" << std::endl;
+    std::cout << "Debug message (" << id << "): " << message << std::endl;
+
+    switch (source)
+    {
+    case GL_DEBUG_SOURCE_API:             std::cout << "Source: API"; break;
+    case GL_DEBUG_SOURCE_WINDOW_SYSTEM:   std::cout << "Source: Window System"; break;
+    case GL_DEBUG_SOURCE_SHADER_COMPILER: std::cout << "Source: Shader Compiler"; break;
+    case GL_DEBUG_SOURCE_THIRD_PARTY:     std::cout << "Source: Third Party"; break;
+    case GL_DEBUG_SOURCE_APPLICATION:     std::cout << "Source: Application"; break;
+    case GL_DEBUG_SOURCE_OTHER:           std::cout << "Source: Other"; break;
+    } std::cout << std::endl;
+
+    switch (type)
+    {
+    case GL_DEBUG_TYPE_ERROR:               std::cout << "Type: Error"; break;
+    case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: std::cout << "Type: Deprecated Behaviour"; break;
+    case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  std::cout << "Type: Undefined Behaviour"; break;
+    case GL_DEBUG_TYPE_PORTABILITY:         std::cout << "Type: Portability"; break;
+    case GL_DEBUG_TYPE_PERFORMANCE:         std::cout << "Type: Performance"; break;
+    case GL_DEBUG_TYPE_MARKER:              std::cout << "Type: Marker"; break;
+    case GL_DEBUG_TYPE_PUSH_GROUP:          std::cout << "Type: Push Group"; break;
+    case GL_DEBUG_TYPE_POP_GROUP:           std::cout << "Type: Pop Group"; break;
+    case GL_DEBUG_TYPE_OTHER:               std::cout << "Type: Other"; break;
+    } std::cout << std::endl;
+
+    switch (severity)
+    {
+    case GL_DEBUG_SEVERITY_HIGH:         std::cout << "Severity: high"; break;
+    case GL_DEBUG_SEVERITY_MEDIUM:       std::cout << "Severity: medium"; break;
+    case GL_DEBUG_SEVERITY_LOW:          std::cout << "Severity: low"; break;
+    case GL_DEBUG_SEVERITY_NOTIFICATION: std::cout << "Severity: notification"; break;
+    } std::cout << std::endl;
+    std::cout << std::endl;
+}
 
 void onFrameBufferResize(GLFWwindow* window, int width, int height) {
     camera.perspective(fov, static_cast<float>(width) / height, near, far);
@@ -144,7 +195,7 @@ void onMouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
 }
 
 void onScrollCallback(GLFWwindow* window, double xOffset, double yOffset) {
-    camera.walk(yOffset / 8.0);
+    camera.walk(yOffset / 8.0f);
     ImGui_ImplGlfw_ScrollCallback(window, xOffset, yOffset);
 }
 
@@ -158,8 +209,8 @@ void onMouseMoveCallback(GLFWwindow* window, double x, double y) {
     }
 
     if (middleMouseButtonDown) {
-        camera.strafe(-dx / 2.0);
-        camera.raise(dy / 2.0);
+        camera.strafe(-dx / 2.0f);
+        camera.raise(dy / 2.0f);
     }
 
     lastMousePosition.x = static_cast<float>(x);
@@ -198,147 +249,10 @@ void processInput(GLFWwindow* window) {
     camera.updateViewMatrix();
 }
 
-std::shared_ptr<Model> loadModel(const std::string& fileName, const std::string& inName = "") {
-    tinyobj::ObjReaderConfig readConfig;
-    readConfig.mtl_search_path = "./";
-
-    tinyobj::ObjReader reader;
-
-    if (!reader.ParseFromFile(fileName, readConfig)) {
-        if (!reader.Error().empty()) {
-            std::cerr << "TinyObjRead: " << reader.Error();
-        }
-        return std::make_shared<Model>();
-    }
-
-    if (!reader.Warning().empty()) {
-        std::cout << "TinyObjReader: " << reader.Warning();
-    }
-
-    auto slash = fileName.find_last_of('/');
-    auto dot = fileName.find_last_of('.');
-
-    auto model = std::make_shared<Model>();
-
-    if (!inName.empty()) {
-        model->setName(inName);
-    }
-    else {
-        model->setName(fileName.substr(slash + 1, dot - (slash + 1)));
-    }
-
-    auto& attrib = reader.GetAttrib();
-    auto& shapes = reader.GetShapes();
-    auto& materials = reader.GetMaterials();
-
-    std::unordered_map<Vertex, uint32_t> uniqueVertices;
-
-    // 三层循环分别遍历mesh(s), face(s), vertex(s)
-    // 不进行任何过滤的情况下，获得的顶点数组会包含
-    // 荣誉数据(比如支持贴图和光照的立方体最多只需24个顶点)
-    // 而这里会产生36个顶点，它们的排布是线性的，绘制的时候
-    // 直接调用glDrawArrays即可，但是更优化的做法是过滤掉
-    // 冗余的顶点，并使用glDrawElements来进行绘制
-    // Loop over shapes
-    //for (size_t s = 0; s < shapes.size(); s++) {
-    //    // Loop over faces(polygon)
-    //    size_t indexOffset = 0;
-    //    for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
-    //        size_t fv = size_t(shapes[s].mesh.num_face_vertices[f]);
-
-    //        // Loop over vertices in the face
-    //        for (size_t v = 0; v < fv; v++) {
-    //            // Access to vertex
-    //            tinyobj::index_t index = shapes[s].mesh.indices[indexOffset + v];
-    //            tinyobj::real_t vx = attrib.vertices[3 * size_t(index.vertex_index) + 0];
-    //            tinyobj::real_t vy = attrib.vertices[3 * size_t(index.vertex_index) + 1];
-    //            tinyobj::real_t vz = attrib.vertices[3 * size_t(index.vertex_index) + 2];
-
-    //            Vertex vertex;
-
-    //            vertex.position = { vx, vy, vz };
-
-    //            // Check if 'normal_index' is zero of positive. negative = no normal data
-    //            if (index.normal_index >= 0) {
-    //                tinyobj::real_t nx = attrib.normals[3 * size_t(index.normal_index) + 0];
-    //                tinyobj::real_t ny = attrib.normals[3 * size_t(index.normal_index) + 1];
-    //                tinyobj::real_t nz = attrib.normals[3 * size_t(index.normal_index) + 2];
-    //                vertex.normal = { nx, ny, nz };
-    //            }
-
-    //            // Check if 'texcoord_index' is zero or positive. negative = no texcoord data
-    //            if (index.texcoord_index >= 0) {
-    //                tinyobj::real_t tx = attrib.texcoords[2 * size_t(index.texcoord_index) + 0];
-    //                tinyobj::real_t ty = 1.0f - attrib.texcoords[2 * size_t(index.texcoord_index) + 1];
-    //                vertex.texCoord = { tx, ty };
-    //            }
-
-    //            // 只有顶点的每个分量都相同时(这里包含position, normal和texcoord)，才考虑它是唯一
-    //            // 举例来说，要让一个立方体能支持正确的纹理贴图和光照计算，总计需要24个顶点
-    //            // 因为立方体有6个面，每个面4个顶点，总计24个顶点，都需要有独立的normal和texcoord
-    //            if (uniqueVertices.count(vertex) == 0) {
-    //                uniqueVertices[vertex] = static_cast<uint32_t>(model.getVertices().size());
-    //                model.addVertex(vertex);
-    //            }
-
-    //            // 如函数开头所说，tinyobjloader读取出的顶点数据是线性的
-    //            // 还是以立方体为例，36个顶点数组对应的索引数组就是0~35
-    //            // 上面经过顶点去重之后，索引也要跟着更新，既然顶点数组
-    //            // 是线性的，我们可以直接用去重过后的顶点数组尺寸做索引
-    //            // 所有的索引值肯定是位于0 ~ model.vertices.size() - 1
-    //            // 之间。model.indices数组的大小最后一定是
-    //            // shapes[s].mesh.num_face_vertices.size() * fv，
-    //            // 也就是三角形面数 * 3
-    //            model.addIndex(uniqueVertices[vertex]);
-    //        }
-    //        indexOffset += fv;
-
-    //        // per-face material
-    //        shapes[s].mesh.material_ids[f];
-    //    }
-    //}
-    for (const auto& shape : shapes) {
-        for (const auto& index : shape.mesh.indices) {
-            Vertex vertex = {};
-
-            vertex.position = {
-                attrib.vertices[3 * index.vertex_index + 0],
-                attrib.vertices[3 * index.vertex_index + 1],
-                attrib.vertices[3 * index.vertex_index + 2]
-            };
-
-            // Check if 'normal_index' is zero of positive. negative = no normal data
-            if (index.normal_index >= 0) {
-                tinyobj::real_t nx = attrib.normals[3 * size_t(index.normal_index) + 0];
-                tinyobj::real_t ny = attrib.normals[3 * size_t(index.normal_index) + 1];
-                tinyobj::real_t nz = attrib.normals[3 * size_t(index.normal_index) + 2];
-                vertex.normal = { nx, ny, nz };
-            }
-
-            vertex.texCoord = {
-                attrib.texcoords[2 * index.texcoord_index + 0],
-                1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
-            };
-
-            if (uniqueVertices.count(vertex) == 0) {
-                uniqueVertices[vertex] = static_cast<uint32_t>(model->getVertices().size());
-                model->addVertex(vertex);
-            }
-
-            model->addIndex(uniqueVertices[vertex]);
-        }
-    }
-
-    return model;
-}
-
 void prepareFrameBufferObject() {
     // Generate and bind the framebuffer
     glGenFramebuffers(1, &fbo);
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-
-    // Create the render texture
-    renderTexture = std::make_shared<Texture>(512, 512);
 
     // Bind the texture to the FBO
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderTexture->getTextureId(), 0);
@@ -346,7 +260,9 @@ void prepareFrameBufferObject() {
     // Create the depth buffer
     glGenRenderbuffers(1, &depthBuffer);
     glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, renderTexture->getWidth() , renderTexture->getHeight());
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, renderTexture->getWidth(), renderTexture->getHeight());
+
+    glBindRenderbuffer(GL_RENDERBUFFER, 0);
 
     // Bind the depth buffer to the FBO
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBuffer);
@@ -355,10 +271,12 @@ void prepareFrameBufferObject() {
     uint32_t drawBuffers[] = { GL_COLOR_ATTACHMENT0 };
     glDrawBuffers(1, drawBuffers);
 
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        std::cout << "Frame Buffer is not Complete." << std::endl;
+    }
+
     // Unbind the framebuffer, and revert to default framebuffer
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    std::cout << "[OpenGL]Error: " << glGetError() << std::endl;
 }
 
 void prepareShaderResources() {
@@ -679,9 +597,36 @@ void showMenuBar()
     }
 }
 
-void addTexture(const std::string& name, const std::string& path, int32_t wrapMode = GL_REPEAT, bool cubeMap = false, bool hdr = false)
-{
-    textures[name] = std::make_shared<Texture>(path, wrapMode, cubeMap, hdr);
+std::shared_ptr<Texture> addTexture(const std::string& name, const std::string& path, int32_t wrapMode = GL_REPEAT) {
+    auto texture = getTexture(name);
+
+    if (texture) {
+        return texture;
+    }
+
+    if (std::filesystem::exists(path)) {
+        auto texture = std::make_shared<Texture>(path, wrapMode);
+        textures[name] = texture;
+        return texture;
+    }
+
+    return nullptr;
+}
+
+std::shared_ptr<Texture> addCubemapTexture(const std::string& name, const std::string& path, int32_t wrapMode = GL_REPEAT, bool cubeMap = false, bool hdr = false) {
+    auto texture = getTexture(name);
+
+    if (texture) {
+        return texture;
+    }
+
+    texture = std::make_shared<Texture>(path, wrapMode, cubeMap, hdr);
+    if (texture) {
+        textures[name] = texture;
+        return texture;
+    }
+
+    return nullptr;
 }
 
 const std::shared_ptr<Texture>& getTexture(const std::string& name) {
@@ -694,6 +639,184 @@ void addMaterial(const std::string& name, const std::shared_ptr<Material>& mater
 
 const std::shared_ptr<Material>& getMaterial(const std::string& name) {
     return materials[name];
+}
+
+std::shared_ptr<Model> loadModel(const std::string& fileName, const std::string& inName, const std::string& materialPath, const std::string& texturePath) {
+    tinyobj::ObjReaderConfig readConfig;
+    readConfig.mtl_search_path = materialPath;
+
+    tinyobj::ObjReader reader;
+
+    if (!reader.ParseFromFile(fileName, readConfig)) {
+        if (!reader.Error().empty()) {
+            std::cerr << "TinyObjRead: " << reader.Error();
+        }
+        return nullptr;
+    }
+
+    if (!reader.Warning().empty()) {
+        std::cout << "TinyObjReader: " << reader.Warning();
+    }
+
+    auto slash = fileName.find_last_of('/');
+    auto dot = fileName.find_last_of('.');
+
+    auto model = std::make_shared<Model>();
+
+    if (!inName.empty()) {
+        model->setName(inName);
+    }
+    else {
+        model->setName(fileName.substr(slash + 1, dot - (slash + 1)));
+    }
+
+    auto& attrib = reader.GetAttrib();
+    auto& shapes = reader.GetShapes();
+    auto& materials = reader.GetMaterials();
+
+    // 三层循环分别遍历mesh(s), face(s), vertex(s)
+    // 不进行任何过滤的情况下，获得的顶点数组会包含
+    // 荣誉数据(比如支持贴图和光照的立方体最多只需24个顶点)
+    // 而这里会产生36个顶点，它们的排布是线性的，绘制的时候
+    // 直接调用glDrawArrays即可，但是更优化的做法是过滤掉
+    // 冗余的顶点，并使用glDrawElements来进行绘制
+    // Loop over shapes
+    //for (size_t s = 0; s < shapes.size(); s++) {
+    //    // Loop over faces(polygon)
+    //    size_t indexOffset = 0;
+    //    for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
+    //        size_t fv = size_t(shapes[s].mesh.num_face_vertices[f]);
+
+    //        // Loop over vertices in the face
+    //        for (size_t v = 0; v < fv; v++) {
+    //            // Access to vertex
+    //            tinyobj::index_t index = shapes[s].mesh.indices[indexOffset + v];
+    //            tinyobj::real_t vx = attrib.vertices[3 * size_t(index.vertex_index) + 0];
+    //            tinyobj::real_t vy = attrib.vertices[3 * size_t(index.vertex_index) + 1];
+    //            tinyobj::real_t vz = attrib.vertices[3 * size_t(index.vertex_index) + 2];
+
+    //            Vertex vertex;
+
+    //            vertex.position = { vx, vy, vz };
+
+    //            // Check if 'normal_index' is zero of positive. negative = no normal data
+    //            if (index.normal_index >= 0) {
+    //                tinyobj::real_t nx = attrib.normals[3 * size_t(index.normal_index) + 0];
+    //                tinyobj::real_t ny = attrib.normals[3 * size_t(index.normal_index) + 1];
+//                tinyobj::real_t nz = attrib.normals[3 * size_t(index.normal_index) + 2];
+//                vertex.normal = { nx, ny, nz };
+//            }
+
+//            // Check if 'texcoord_index' is zero or positive. negative = no texcoord data
+//            if (index.texcoord_index >= 0) {
+//                tinyobj::real_t tx = attrib.texcoords[2 * size_t(index.texcoord_index) + 0];
+//                tinyobj::real_t ty = 1.0f - attrib.texcoords[2 * size_t(index.texcoord_index) + 1];
+//                vertex.texCoord = { tx, ty };
+//            }
+
+//            // 只有顶点的每个分量都相同时(这里包含position, normal和texcoord)，才考虑它是唯一
+//            // 举例来说，要让一个立方体能支持正确的纹理贴图和光照计算，总计需要24个顶点
+//            // 因为立方体有6个面，每个面4个顶点，总计24个顶点，都需要有独立的normal和texcoord
+//            if (uniqueVertices.count(vertex) == 0) {
+//                uniqueVertices[vertex] = static_cast<uint32_t>(model.getVertices().size());
+//                model.addVertex(vertex);
+//            }
+
+//            // 如函数开头所说，tinyobjloader读取出的顶点数据是线性的
+//            // 还是以立方体为例，36个顶点数组对应的索引数组就是0~35
+//            // 上面经过顶点去重之后，索引也要跟着更新，既然顶点数组
+//            // 是线性的，我们可以直接用去重过后的顶点数组尺寸做索引
+//            // 所有的索引值肯定是位于0 ~ model.vertices.size() - 1
+//            // 之间。model.indices数组的大小最后一定是
+//            // shapes[s].mesh.num_face_vertices.size() * fv，
+//            // 也就是三角形面数 * 3
+//            model.addIndex(uniqueVertices[vertex]);
+//        }
+//        indexOffset += fv;
+
+//        // per-face material
+//        shapes[s].mesh.material_ids[f];
+//    }
+//} 
+    size_t materialIndex = 0;
+
+    for (const auto& shape : shapes) {
+        auto mesh = std::make_shared<Mesh>();
+        std::unordered_map<Vertex, uint32_t> uniqueVertices;
+        for (const auto& index : shape.mesh.indices) {
+            Vertex vertex = {};
+
+            vertex.position = {
+                attrib.vertices[3 * index.vertex_index + 0],
+                attrib.vertices[3 * index.vertex_index + 1],
+                attrib.vertices[3 * index.vertex_index + 2]
+            };
+
+            // Check if 'normal_index' is zero of positive. negative = no normal data
+            if (index.normal_index >= 0) {
+                tinyobj::real_t nx = attrib.normals[3 * size_t(index.normal_index) + 0];
+                tinyobj::real_t ny = attrib.normals[3 * size_t(index.normal_index) + 1];
+                tinyobj::real_t nz = attrib.normals[3 * size_t(index.normal_index) + 2];
+                vertex.normal = { nx, ny, nz };
+            }
+
+            vertex.texCoord = {
+                attrib.texcoords[2 * index.texcoord_index + 0],
+                1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+            };
+
+            if (uniqueVertices.count(vertex) == 0) {
+                uniqueVertices[vertex] = static_cast<uint32_t>(mesh->getVertices().size());
+                mesh->addVertex(vertex);
+            }
+
+            mesh->addIndex(uniqueVertices[vertex]);
+        }
+
+        mesh->setName(shape.name);
+
+        const auto& material = materials[materialIndex];
+
+        auto meshMaterial = std::make_shared<Material>();
+
+        meshMaterial->Ka = { material.ambient[0], material.ambient[1], material.ambient[2] };
+        meshMaterial->Kd = { material.diffuse[0], material.diffuse[1], material.diffuse[2] };
+        meshMaterial->Ke = { material.emission[0], material.emission[2], material.emission[2] };
+        meshMaterial->Ks = { material.specular[0], material.specular[1], material.specular[2] };
+
+        meshMaterial->shininess = material.shininess;
+        meshMaterial->ior = material.ior;
+        meshMaterial->eta = 1.0f / meshMaterial->ior;
+
+        if (!material.diffuse_texname.empty()) {
+            auto texture = addTexture(material.name + "Diffuse", texturePath + material.diffuse_texname);
+
+            if (texture) {
+                mesh->addTexture(texture);
+            }
+ 
+        }
+        else {
+            mesh->addTexture(defaultAlbedo);
+        }
+
+        if (!material.bump_texname.empty()) {
+            auto texture = addTexture(material.name + "Normal", texturePath + material.bump_texname);
+
+            if (texture) {
+                mesh->addTexture(texture);
+                meshMaterial->hasNormalMap = true;
+            }
+        }
+
+        mesh->setMaterial(std::move(meshMaterial));
+
+        materialIndex++;
+
+        model->addMesh(std::move(mesh));
+    }
+
+    return model;
 }
 
 void buildImGuiWidgets()
@@ -729,8 +852,8 @@ void buildImGuiWidgets()
         ImGui::ColorEdit3("Point Light Color", (float*)&lights[0].color);
         ImGui::ColorEdit3("Directional Light Color", (float*)&lights[1].color);
         ImGui::DragFloat3("Light Direction", (float*)&lights[1].position, 0.1f, -1.0f, 1.f);
-
         ImGui::DragFloat3("Light Position", (float*)&lights[0].position, 0.1f, 0.0f, 10.f);
+        ImGui::Checkbox("Projective Texture Mapping", &showProjector);
 
         if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
             counter++;
@@ -817,6 +940,8 @@ void updateGlobalUniform() {
     sceneShader.setUniform("projectorTransform", projectorTransform);
 
     sceneShader.setUniform("projection", getTexture("Projection")->getTextureIndex());
+    
+    sceneShader.setUniform("showProjector", showProjector);
 }
 
 void drawSkyBox(const glm::mat4& inViewMaterix, const glm::mat4& inProjectionMatrix) {
@@ -824,7 +949,9 @@ void drawSkyBox(const glm::mat4& inViewMaterix, const glm::mat4& inProjectionMat
 
     auto& model = models[0];
 
-    model->use();
+    auto& mesh = model->getMeshes()[0];
+    
+    mesh->use();
 
     glm::mat4 viewMatrix = inViewMaterix;
 
@@ -839,7 +966,7 @@ void drawSkyBox(const glm::mat4& inViewMaterix, const glm::mat4& inProjectionMat
     sceneShader.setUniform("worldMatrix", worldMatrix);
     sceneShader.setUniform("mvpMatrix", mvpMatrix);
 
-    glDrawElements(GL_TRIANGLES, model->getElementCount(), GL_UNSIGNED_INT, 0);
+    glDrawElements(GL_TRIANGLES, mesh->getIndexCount(), GL_UNSIGNED_INT, 0);
 }
 
 void drawLight(const glm::mat4& inViewMaterix, const glm::mat4& inProjectionMatrix) {
@@ -859,40 +986,61 @@ void drawLight(const glm::mat4& inViewMaterix, const glm::mat4& inProjectionMatr
     glDrawElements(GL_TRIANGLES, 64, GL_UNSIGNED_INT, 0);
 }
 
-void drawModels(const glm::mat4& inViewMaterix, const glm::mat4& inProjectionMatrix) {
-    for (size_t i = 1; i < models.size(); i++) {
-        models[i]->use();
+void updateMaterialUniform(const std::shared_ptr<Material>& material) {
+    if (material) {
+        sceneShader.setUniform("material.Ka", material->Ka);
+        sceneShader.setUniform("material.Kd", material->Kd);
+        sceneShader.setUniform("material.Ks", material->Ks);
+        sceneShader.setUniform("material.Ke", material->Ke);
+        sceneShader.setUniform("material.shininess", material->shininess);
+        sceneShader.setUniform("material.reflectionFactor", material->reflectionFactor);
+        sceneShader.setUniform("material.refractionFactor", material->refractionFactor);
+        sceneShader.setUniform("material.ior", material->ior);
+        sceneShader.setUniform("material.eta", material->eta);
+        sceneShader.setUniform("material.hasNormalMap", material->hasNormalMap);
+    }
+}
 
-        sceneShader.setUniform("drawSkyBox", false);
-        sceneShader.setUniform("textures[0]", models[i]->getTextureIndex(0));
-        sceneShader.setUniform("textures[1]", models[i]->getTextureIndex(1));
+void drawModel(const std::shared_ptr<Model>& model, const glm::mat4& inViewMaterix, const glm::mat4& inProjectionMatrix) {
+    sceneShader.setUniform("drawSkyBox", false);
 
-        auto material = models[i]->getMaterial();
+    for (auto& mesh : model->getMeshes()) {
+        mesh->use();
 
-        if (material) {
-            sceneShader.setUniform("material.Ka", material->Ka);
-            sceneShader.setUniform("material.Kd", material->Kd);
-            sceneShader.setUniform("material.Ks", material->Ks);
-            sceneShader.setUniform("material.shininess", material->shininess);
-            sceneShader.setUniform("material.reflectionFactor", material->reflectionFactor);
-            sceneShader.setUniform("material.refractionFactor", material->refractionFactor);
-            sceneShader.setUniform("maeterial.eta", material->eta);
-        }
+        auto material = mesh->getMaterial();
 
-        glm::mat4 worldMatrix = models[i]->getTransform();
+        updateMaterialUniform(material);
+
+        sceneShader.setUniform("textures[0]", mesh->getTextureIndex(0));
+        sceneShader.setUniform("textures[1]", mesh->getTextureIndex(1));
+
+        glm::mat4 worldMatrix = model->getTransform();
         glm::mat4 mvpMatrix = inProjectionMatrix * inViewMaterix * worldMatrix;
 
         sceneShader.setUniform("worldMatrix", worldMatrix);
         sceneShader.setUniform("mvpMatrix", mvpMatrix);
 
-        glDrawElements(GL_TRIANGLES, models[i]->getElementCount(), GL_UNSIGNED_INT, 0);
+        glDrawElements(GL_TRIANGLES, mesh->getIndexCount(), GL_UNSIGNED_INT, 0);
     }
+}
+
+void drawModels(const glm::mat4& inViewMaterix, const glm::mat4& inProjectionMatrix) {
+    for (size_t i = 1; i < models.size() - 1; i++) {
+        drawModel(models[i], inViewMaterix, inProjectionMatrix);
+    }
+}
+
+void clear(ImVec4 color, int32_t clearFlag) {
+    glClearColor(color.x, color.y, color.z, 1.0f);
+    glClear(clearFlag);
 }
 
 void renderToTexture() {
     // Bind to texture's FBO
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
     glViewport(0, 0, 512, 512); // Viewport for the texture
+
+    clear(clearColor, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glm::mat4 viewMatrix = camera.getViewMatrix();
     camera.perspective(fov, 1.0f, near, far);
@@ -908,9 +1056,6 @@ void renderToTexture() {
 
 void renderScene()
 {
-	glClearColor(clearColor.x, clearColor.y, clearColor.z, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
     updateGlobalUniform();
 
     renderToTexture();
@@ -920,9 +1065,13 @@ void renderScene()
     camera.perspective(fov, static_cast<float>(WindowWidth) / WindowHeight, near, far);
     glm::mat4 projectionMatrix = camera.getProjectionMatrix();
 
+    clear(clearColor, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
     drawSkyBox(viewMatrix, projectionMatrix);
 
     drawModels(viewMatrix, projectionMatrix);
+
+    drawModel(models[models.size() - 1], viewMatrix, projectionMatrix);
 
     drawLight(viewMatrix, projectionMatrix);
 }
@@ -933,18 +1082,6 @@ void render() {
 }
 
 void loadModels() {
-    addTexture("Error", "./resources/textures/Error.png");
-    addTexture("CubeMap", "./resources/textures/grace", GL_CLAMP_TO_EDGE, true, true);
-    addTexture("Fieldstone", "./resources/textures/Fieldstone.tga");
-    addTexture("FieldstoneBumpDOT3", "./resources/textures/FieldstoneBumpDOT3.tga");
-    addTexture("BrickDiffuse", "./resources/textures/Brick_Diffuse.jpg");
-    addTexture("BrickNormal", "./resources/textures/Brick_Normal.jpg");
-    addTexture("Coin", "./resources/textures/Coin.png");
-    addTexture("CoinDot3", "./resources/textures/CoinDot.png");
-    addTexture("CrateDiffuse", "./resources/textures/CrateDiffuse.png");
-    addTexture("CrateNormal", "./resources/textures/CrateNormal.png");
-    addTexture("Projection", "./resources/textures/Kanna.jpg", GL_CLAMP_TO_BORDER);
-
     auto material = std::make_shared<Material>();
 
     material->Ka = { 0.37f, 0.37f, 0.37f };
@@ -958,7 +1095,12 @@ void loadModels() {
 
     addMaterial("Common", material);
 
-    auto model = loadModel("./resources/models/torus.obj");
+    auto model = loadModel("./resources/models/cube.obj", "SkyBox");
+    model->scale(glm::vec3(100.0f));
+    model->addTexture(getTexture("CubeMap"));
+    models.push_back(model); 
+    
+    model = loadModel("./resources/models/torus.obj");
     model->setPosition(glm::vec3(-2.5f, 0.0f, 1.0f));
     model->addTexture(getTexture("Fieldstone"));
     model->addTexture(getTexture("FieldstoneBumpDOT3"));
@@ -966,26 +1108,23 @@ void loadModels() {
 
     //models.push_back(model);
 
-    model = loadModel("./resources/models/cube.obj", "SkyBox");
-    model->scale(glm::vec3(100.0f));
-    model->addTexture(getTexture("CubeMap"));
-    models.push_back(model);
-
     model = std::make_shared<Model>();
 
     GeometryGenerator geometryGenerator;
-    auto mesh = geometryGenerator.CreateSphere(1, 20, 20);
+    auto sphere = geometryGenerator.CreateSphere(1, 20, 20);
 
-    for (size_t i = 0; i < mesh.Vertices.size(); i++) {
+    auto mesh = std::make_shared<Mesh>();
+
+    for (size_t i = 0; i < sphere.Vertices.size(); i++) {
         Vertex vertex;
-        vertex.position = mesh.Vertices[i].Position;
-        vertex.normal = mesh.Vertices[i].Normal;
-        vertex.texCoord = mesh.Vertices[i].TexC;
-        model->addVertex(vertex);
+        vertex.position = sphere.Vertices[i].Position;
+        vertex.normal = sphere.Vertices[i].Normal;
+        vertex.texCoord = sphere.Vertices[i].TexC;
+        mesh->addVertex(vertex);
     }
 
-    for (size_t i = 0; i < mesh.Indices32.size(); i++) {
-        model->addIndex(mesh.Indices32[i]);
+    for (size_t i = 0; i < sphere.Indices32.size(); i++) {
+        mesh->addIndex(sphere.Indices32[i]);
     }
 
     model->setMaterial(material);
@@ -1000,7 +1139,7 @@ void loadModels() {
     model = loadModel("./resources/models/plane.obj");
     model->addTexture(getTexture("Fieldstone"));
     model->addTexture(getTexture("FieldstoneBumpDOT3"));
-    model->scale(glm::vec3(5.0f, 1.0f, 5.0f));
+    model->scale(glm::vec3(10.0f, 1.0f, 10.0f));
 
     auto planeMaterial = std::make_shared<Material>();
 
@@ -1023,13 +1162,26 @@ void loadModels() {
 
     //models.push_back(model);
 
-    model = loadModel("./resources/models/cube.obj");
-    model->addTexture(getTexture("CrateDiffuse"));
+    model = loadModel("./resources/models/crate.obj");
+    //model->addTexture(getTexture("CrateDiffuse"));
     //model->addTexture(renderTexture);
-    model->addTexture(getTexture("CrateNormal"));
+    //model->addTexture(getTexture("CrateNormal"));
     model->setPosition(glm::vec3(0.0f, 1.0f, 2.0f));
     model->setMaterial(material);
 
+    //models.push_back(model);
+
+    model = loadModel("./resources/models/plane.obj");
+    //model->addTexture(getTexture("CrateDiffuse"));
+    model->addTexture(renderTexture);
+    model->addTexture(getTexture("CrateNormal"));
+    model->setPosition(glm::vec3(0.0f, 5.0f, -5.0f));
+    model->rotate(-90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+    model->setMaterial(material);
+    model->scale(glm::vec3(10.0f, 1.0f, 10.0f));
+    models.push_back(model);
+
+    model = loadModel("./resources/models/Marry/Marry.obj", "Marry", "./resources/models/Marry/", "./resources/models/Marry/");
     models.push_back(model);
 
     for (size_t i = 0; i < models.size(); i++) {
@@ -1038,11 +1190,33 @@ void loadModels() {
     }
 }
 
+void prepareTextures() {
+    // Create the render texture
+    addTexture("Error", "./resources/textures/Error.png");
+
+    renderTexture = std::make_shared<Texture>("renderTexture", 512, 512);
+
+    defaultAlbedo = std::make_shared<Texture>("defaultAlbedo", 1, 1);
+
+    addCubemapTexture("CubeMap", "./resources/textures/grace", GL_CLAMP_TO_EDGE, true, true);
+    //addTexture("Fieldstone", "./resources/textures/Fieldstone.tga");
+    //addTexture("FieldstoneBumpDOT3", "./resources/textures/FieldstoneBumpDOT3.tga");
+    //addTexture("BrickDiffuse", "./resources/textures/Brick_Diffuse.jpg");
+    //addTexture("BrickNormal", "./resources/textures/Brick_Normal.jpg");
+    addTexture("Coin", "./resources/textures/Coin.png");
+    addTexture("CoinDot3", "./resources/textures/CoinDot.png");
+    //addTexture("CrateDiffuse", "./resources/textures/CrateDiffuse.png");
+    //addTexture("CrateNormal", "./resources/textures/CrateNormal.png");
+    addTexture("Projection", "./resources/textures/Kanna.jpg", GL_CLAMP_TO_BORDER);
+
+}
+
 int main() {
 	glfwInit();
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 
 	window = glfwCreateWindow(WindowWidth, WindowHeight, "OpenGL Shading Language", nullptr, nullptr);
 
@@ -1059,9 +1233,18 @@ int main() {
 		return -1;
 	}
 
+    glDebugMessageControl(GL_DEBUG_SOURCE_API,
+                          GL_DEBUG_TYPE_ERROR,
+                          GL_DEBUG_SEVERITY_HIGH,
+                          0, nullptr, GL_TRUE);
+
+    glDebugMessageCallback(glDebugOutput, nullptr);
+
 	bindCallbacks();
 
 	glEnable(GL_DEPTH_TEST);
+
+    prepareTextures();
 
 	prepareShaderResources();
 	sceneShader.printActiveAttributes();

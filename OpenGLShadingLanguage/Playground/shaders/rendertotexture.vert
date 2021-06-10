@@ -1,4 +1,5 @@
 #version 400
+
 layout (location = 0) in vec3 inPosition;
 layout (location = 1) in vec3 inTangent;
 layout (location = 2) in vec3 inBinormal;
@@ -26,11 +27,14 @@ struct Material{
 	vec3 Ka;
 	vec3 Kd;
 	vec3 Ks;
+	vec3 Ke;
 	float shininess;
 	float reflectionFactor;
 	float refractionFactor;
 	// relative index of refraction(n1/n2)
+	float ior;
 	float eta;
+	bool hasNormalMap;
 };
 
 uniform Material material;
