@@ -5,8 +5,6 @@ VisualStudioVersion = 16.0.31313.79
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Playground", "Playground\Playground.vcxproj", "{398EA348-15C5-4AFE-B540-AF918479EBED}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ObjViewer", "ObjViewer\ObjViewer.vcxproj", "{B2BCD054-481D-400A-9AC8-94594BF3204D}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -17,10 +15,6 @@ Global
 		{398EA348-15C5-4AFE-B540-AF918479EBED}.Debug|x64.Build.0 = Debug|x64
 		{398EA348-15C5-4AFE-B540-AF918479EBED}.Release|x64.ActiveCfg = Release|x64
 		{398EA348-15C5-4AFE-B540-AF918479EBED}.Release|x64.Build.0 = Release|x64
-		{B2BCD054-481D-400A-9AC8-94594BF3204D}.Debug|x64.ActiveCfg = Debug|x64
-		{B2BCD054-481D-400A-9AC8-94594BF3204D}.Debug|x64.Build.0 = Debug|x64
-		{B2BCD054-481D-400A-9AC8-94594BF3204D}.Release|x64.ActiveCfg = Release|x64
-		{B2BCD054-481D-400A-9AC8-94594BF3204D}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

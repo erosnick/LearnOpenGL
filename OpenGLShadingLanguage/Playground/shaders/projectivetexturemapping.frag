@@ -156,7 +156,7 @@ void main() {
 	fogFactor = computeExponentFog(fog, distance, 2.0);
 
 	// vec3 finalColor = mix(fog.color.rgb, light1 + light2 + ambient, fogFactor);
-	vec3 finalColor = mix(fog.color.rgb, light3 + ambient, fogFactor);
+	vec3 finalColor = mix(fog.color.rgb, light2 + light3 + ambient, fogFactor);
 
 	vec4 reflectionColor = texture(cubeMap, reflectionDirection);
 	vec4 refractionColor = texture(cubeMap, refractionDirection);

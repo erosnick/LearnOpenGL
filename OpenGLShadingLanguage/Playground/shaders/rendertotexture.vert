@@ -46,7 +46,7 @@ void main() {
 	}
 	else {
 		worldPosition = (worldMatrix * vec4(inPosition, 1.0)).xyz;
-		worldNormal = normalize(worldMatrix * vec4(inNormal, 0.0)).xyz;
+		worldNormal = normalize((transpose(inverse(worldMatrix)) * vec4(inNormal, 0.0)).xyz);
 		worldViewDirection = normalize(eye - worldPosition);
 		reflectionDirection = reflect(-worldViewDirection, worldNormal);
 		refractionDirection = refract(-worldViewDirection, worldNormal, material.eta);
@@ -55,8 +55,11 @@ void main() {
 		projectorTexcoord = vec4(projectorTexcoord * 0.5 + 0.5 * projectorTexcoord.w);
 	}
 
-	vec3 worldTangent = (worldMatrix * vec4(inTangent, 0.0)).xyz;
-	vec3 worldBinormal = (worldMatrix * vec4(inBinormal, 0.0)).xyz;
+	vec3 worldTangent = normalize((worldMatrix * vec4(inTangent, 0.0)).xyz);
+	vec3 worldBinormal = normalize(cross(worldNormal, worldTangent)); // normalize(worldMatrix * vec4(inBinormal, 0.0)).xyz);
+
+	worldTangent = normalize(worldTangent - dot(worldTangent, worldNormal) * worldNormal);
+	worldBinormal = cross(worldNormal, worldTangent);
 
 	// Transform tangent, binormal, normal from object space to world space
 	// tangentToWorld1, tangentToWorld2 and tangentToWorld3 construct the

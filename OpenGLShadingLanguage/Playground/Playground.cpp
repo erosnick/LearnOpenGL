@@ -43,11 +43,12 @@ struct Light {
 struct Fog {
     float minDistance;
     float maxDistance;
-    float density;
+    float density = 0.0f;
     glm::vec4 color;
 };
 
-uint32_t vao;
+uint32_t lightCubeVao;
+uint32_t screenQuadVao;
 uint32_t textureId;
 Shader lightCubeShader;
 Shader sceneShader;
@@ -57,16 +58,17 @@ std::vector<std::shared_ptr<Model>> models;
 std::map<std::string, std::shared_ptr<Texture>> textures;
 std::map<std::string, std::shared_ptr<Material>> materials;
 
-Light lights[3];
+std::vector<Light> lights(5);
 
-Fog fog = { 1.0f, 10.0f, 0.02f, {0.8f, 0.8f, 0.8f, 1.0f} };
+Fog fog = { 1.0f, 10.0f, 0.0f, {0.8f, 0.8f, 0.8f, 1.0f} };
 
 float angle = 0.0f;
 
-bool showDemoWindow = true;
-bool showAnotherWindow = false;
-bool showOpenMenuItem = true;
-bool showProjector = false;
+bool bShowDemoWindow = true;
+bool bShowAnotherWindow = false;
+bool bShowOpenMenuItem = true;
+bool bShowProjector = false;
+bool bDrawNormals = false;
 ImVec4 clearColor = ImVec4(0.392f, 0.584f, 0.929f, 1.0f);
 ImVec4 pointLightColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 ImVec4 directionaLightColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -83,8 +85,8 @@ const uint32_t WindowHeight = 720;
 
 float frameTime = 0.0f;
 
-bool rightMouseButtonDown = false;
-bool middleMouseButtonDown = false;
+bool bRightMouseButtonDown = false;
+bool bMiddleMouseButtonDown = false;
 
 glm::vec2 lastMousePosition = { 0.0f, 0.0f };
 
@@ -99,7 +101,7 @@ float near = 0.2f;
 float far = 200.0f;
 
 //Camera camera(projectorPosition, projectAt);
-Camera camera({ 0.0f, 1.0f, 4.5f }, { 0.0f, 1.0f, -1.0f });
+Camera camera({ 0.0f, 2.5f, 4.5f }, { 0.0f, 2.5f, -1.0f });
 
 glm::mat4 projectorView = glm::lookAt(projectorPosition, projectAt, projectorUp);
 glm::mat4 projectorProjection = glm::perspective(glm::radians(60.0f), static_cast<float>(WindowWidth) / WindowHeight, near, far);
@@ -161,8 +163,10 @@ void APIENTRY glDebugOutput(GLenum source,
 }
 
 void onFrameBufferResize(GLFWwindow* window, int width, int height) {
-    camera.perspective(fov, static_cast<float>(width) / height, near, far);
-	glViewport(0, 0, width, height);
+    if (width > 0 && height > 0) {
+        camera.perspective(fov, static_cast<float>(width) / height, near, far);
+        glViewport(0, 0, width, height);
+    }
 }
 
 void onKeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {    
@@ -171,7 +175,7 @@ void onKeyCallback(GLFWwindow* window, int key, int scancode, int action, int mo
 
 void onMouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
     if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) {
-        rightMouseButtonDown = true;
+        bRightMouseButtonDown = true;
         double x;
         double y;
         glfwGetCursorPos(window, &x, &y);
@@ -180,15 +184,15 @@ void onMouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
     }
 
     if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_RELEASE) {
-        rightMouseButtonDown = false;
+        bRightMouseButtonDown = false;
     }
 
     if (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_PRESS) {
-        middleMouseButtonDown = true;
+        bMiddleMouseButtonDown = true;
     }
 
     if (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_RELEASE) {
-        middleMouseButtonDown = false;
+        bMiddleMouseButtonDown = false;
     }
 
     ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
@@ -203,12 +207,12 @@ void onMouseMoveCallback(GLFWwindow* window, double x, double y) {
     double dx = (lastMousePosition.x - x) * frameTime;
     double dy = (lastMousePosition.y - y) * frameTime;
 
-    if (rightMouseButtonDown) {
+    if (bRightMouseButtonDown) {
         camera.yaw(static_cast<float>(dx) * rotateSpeed);
         camera.pitch(static_cast<float>(dy) * rotateSpeed);
     }
 
-    if (middleMouseButtonDown) {
+    if (bMiddleMouseButtonDown) {
         camera.strafe(-dx / 2.0f);
         camera.raise(dy / 2.0f);
     }
@@ -380,27 +384,43 @@ void prepareShaderResources() {
     //delete[] blockBuffer;
 
     lights[0].color = { 1.0f, 1.0f, 1.0f, 1.0f };
-    lights[0].position = { 0.0f, 1.0f, 0.5f, 1.0f};
-    lights[0].intensity = 1.0f;
-    lights[0].Kc = 1.0f;
+    lights[0].position = { 0.0f, 0.0f, -1.0f, 0.0f};
+    lights[0].intensity = 0.5f;
+    lights[0].Kc = 0.5f;
     lights[0].Kl = 0.09f;
     lights[0].Kq = 0.032f;
-    lights[0].type = 0;
+    lights[0].type = 1;
 
     lights[1].color = { 1.0f, 1.0f, 1.0f, 1.0f };
-    lights[1].position = { 0.0f, 0.0f, -1.0f, 0.0};
-    lights[1].intensity = 1.0f;
-    lights[1].type = 1;
+    lights[1].position = { -1.0f, 5.0f, 0.0f, 1.0f };
+    lights[1].intensity = 0.25f;
+    lights[1].Kc = 0.5f;
+    lights[1].Kl = 0.09f;
+    lights[1].Kq = 0.032f;
+    lights[1].type = 0;
 
-    //lights[2].color = { 1.0f, 0.418f, 1.0f, 1.0f };
     lights[2].color = { 1.0f, 1.0f, 1.0f, 1.0f };
-    lights[2].position = {0.0f, 3.0f, 2.0f, 2.0f };
-    lights[2].direction = { 0.0f, -1.0f, 0.0f };
-    lights[2].exponent = 8.0f;
-    lights[2].cutoff = 30.0f;
-    lights[2].outerCutoff = 45.0f;
-    lights[2].intensity = 1.0f;
-    lights[2].type = 2;
+    lights[2].position = { -1.0f, 2.0f, -0.5f, 1.0f };
+    lights[2].intensity = 0.25f;
+    lights[2].Kc = 0.5f;
+    lights[2].Kl = 0.09f;
+    lights[2].Kq = 0.032f;
+    lights[2].type = 0;
+
+    lights[3].color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    lights[3].position = { 1.0f, -1.0f, 1.0f, 0.0};
+    lights[3].intensity = 0.3f;
+    lights[3].type = 1;
+           
+    //lights[2].color = { 1.0f, 0.418f, 1.0f, 1.0f };
+    lights[4].color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    lights[4].position = {0.0f, 3.0f, 2.0f, 2.0f };
+    lights[4].direction = { 0.0f, -1.0f, 0.0f };
+    lights[4].exponent = 8.0f;
+    lights[4].cutoff = 30.0f;
+    lights[4].outerCutoff = 45.0f;
+    lights[4].intensity = 1.0f;
+    lights[4].type = 2;
 
     glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.5f));
     glm::mat4 translate = glm::translate(glm::mat4(1.0f), glm::vec3(0.5f));
@@ -471,17 +491,17 @@ void prepareGeometryData() {
     };
 
     // Create the buffer objects
-    uint32_t vbo;
-    glGenBuffers(1, &vbo);
+    uint32_t lightCubeVbo;
+    glGenBuffers(1, &lightCubeVbo);
 
-    uint32_t ibo;
-    glGenBuffers(1, &ibo);
+    uint32_t lightCubeIbo;
+    glGenBuffers(1, &lightCubeIbo);
 
     // Create and setup the vertex array object
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
+    glGenVertexArrays(1, &lightCubeVao);
+    glBindVertexArray(lightCubeVao);
 
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, lightCubeVbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
     int32_t stride = sizeof(Vertex);
@@ -509,8 +529,41 @@ void prepareGeometryData() {
     // Map index 1 to the texture coordinate buffer
     glEnableVertexAttribArray(4);	//
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, lightCubeIbo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+    SimpleVertex screenQuadVertices[] = {
+        {{0.0f, 0.0f, 0.0f}},
+        {{WindowWidth, 0.0f, 0.0f}},
+        {{WindowWidth, WindowHeight, 0.0f}},
+        {{0.0f, WindowHeight, 0.0f}}
+    };
+
+    uint32_t screenQuadIndices[] = {
+        0, 1, 2,
+        2, 3, 0
+    };
+
+    glGenVertexArrays(1, &screenQuadVao);
+    glBindVertexArray(screenQuadVao);
+
+    uint32_t screenQuadVbo;
+    glGenBuffers(1, &screenQuadVbo);
+    glBindBuffer(GL_ARRAY_BUFFER, screenQuadVbo);
+
+    glBufferData(GL_ARRAY_BUFFER, sizeof(screenQuadVertices), screenQuadVertices, GL_STATIC_DRAW);
+
+    stride = sizeof(SimpleVertex);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)nullptr);
+    glEnableVertexAttribArray(0);
+    
+    uint32_t screenQuadIbo;
+
+    glGenBuffers(1, &screenQuadIbo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, screenQuadIbo);
+
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(screenQuadIndices), screenQuadIndices, GL_STATIC_DRAW);
 }
 
 void initImGui()
@@ -822,8 +875,8 @@ std::shared_ptr<Model> loadModel(const std::string& fileName, const std::string&
 void buildImGuiWidgets()
 {
     // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-    if (showDemoWindow)
-        ImGui::ShowDemoWindow(&showDemoWindow);
+    if (bShowDemoWindow)
+        ImGui::ShowDemoWindow(&bShowDemoWindow);
 
     // 2. Show a simple window that we create ourselves. We use a Begin/End pair to created a named window.
     {
@@ -838,8 +891,8 @@ void buildImGuiWidgets()
         //ImGui::PushFont(fonts[2]);
         ImGui::Text("This is some useful text use another font.");
         //ImGui::PopFont();
-        ImGui::Checkbox("Demo Window", &showDemoWindow);      // Edit bools storing our window open/close state
-        ImGui::Checkbox("Another Window", &showAnotherWindow);
+        ImGui::Checkbox("Demo Window", &bShowDemoWindow);      // Edit bools storing our window open/close state
+        ImGui::Checkbox("Another Window", &bShowAnotherWindow);
 
         auto commonMaterial = getMaterial("Common");
 
@@ -852,8 +905,9 @@ void buildImGuiWidgets()
         ImGui::ColorEdit3("Point Light Color", (float*)&lights[0].color);
         ImGui::ColorEdit3("Directional Light Color", (float*)&lights[1].color);
         ImGui::DragFloat3("Light Direction", (float*)&lights[1].position, 0.1f, -1.0f, 1.f);
-        ImGui::DragFloat3("Light Position", (float*)&lights[0].position, 0.1f, 0.0f, 10.f);
-        ImGui::Checkbox("Projective Texture Mapping", &showProjector);
+        ImGui::DragFloat3("Light Position", (float*)&lights[0].position, 0.1f, -10.0f, 10.f);
+        ImGui::Checkbox("Projective Texture Mapping", &bShowProjector);
+        ImGui::Checkbox("Draw Normals", &bDrawNormals);
 
         if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
             counter++;
@@ -869,13 +923,13 @@ void buildImGuiWidgets()
     }
 
     // 3. Show another simple window.
-    if (showAnotherWindow)
+    if (bShowAnotherWindow)
     {
-        ImGui::Begin("Another Window", &showAnotherWindow);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+        ImGui::Begin("Another Window", &bShowAnotherWindow);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
 
 		ImGui::Text("Hello from another window!");
         if (ImGui::Button("Close Me"))
-            showAnotherWindow = false;
+            bShowAnotherWindow = false;
         ImGui::End();
     }
 }
@@ -917,16 +971,32 @@ void updateGlobalUniform() {
     sceneShader.setUniform("lights[1].color", lights[1].color);
     sceneShader.setUniform("lights[1].position", lights[1].position);
     sceneShader.setUniform("lights[1].intensity", lights[1].intensity);
+    sceneShader.setUniform("lights[1].Kc", lights[1].Kc);
+    sceneShader.setUniform("lights[1].Kl", lights[1].Kl);
+    sceneShader.setUniform("lights[1].Kq", lights[1].Kq);
     sceneShader.setUniform("lights[1].type", lights[1].type);
 
     sceneShader.setUniform("lights[2].color", lights[2].color);
     sceneShader.setUniform("lights[2].position", lights[2].position);
-    sceneShader.setUniform("lights[2].direction", lights[2].direction);
-    sceneShader.setUniform("lights[2].exponent", lights[2].exponent);
-    sceneShader.setUniform("lights[2].cutoff", glm::cos(glm::radians(lights[2].cutoff)));
-    sceneShader.setUniform("lights[2].outerCutoff", glm::cos(glm::radians(lights[2].outerCutoff)));
     sceneShader.setUniform("lights[2].intensity", lights[2].intensity);
+    sceneShader.setUniform("lights[2].Kc", lights[2].Kc);
+    sceneShader.setUniform("lights[2].Kl", lights[2].Kl);
+    sceneShader.setUniform("lights[2].Kq", lights[2].Kq);
     sceneShader.setUniform("lights[2].type", lights[2].type);
+    
+    sceneShader.setUniform("lights[3].color", lights[3].color);
+    sceneShader.setUniform("lights[3].position", lights[3].position);
+    sceneShader.setUniform("lights[3].intensity", lights[3].intensity);
+    sceneShader.setUniform("lights[3].type", lights[3].type);
+
+    sceneShader.setUniform("lights[4].color", lights[4].color);
+    sceneShader.setUniform("lights[4].position", lights[4].position);
+    sceneShader.setUniform("lights[4].direction", lights[4].direction);
+    sceneShader.setUniform("lights[4].exponent", lights[4].exponent);
+    sceneShader.setUniform("lights[4].cutoff", glm::cos(glm::radians(lights[4].cutoff)));
+    sceneShader.setUniform("lights[4].outerCutoff", glm::cos(glm::radians(lights[4].outerCutoff)));
+    sceneShader.setUniform("lights[4].intensity", lights[4].intensity);
+    sceneShader.setUniform("lights[4].type", lights[4].type);
 
     sceneShader.setUniform("fog.minDistance", fog.minDistance);
     sceneShader.setUniform("fog.maxDistance", fog.maxDistance);
@@ -941,7 +1011,7 @@ void updateGlobalUniform() {
 
     sceneShader.setUniform("projection", getTexture("Projection")->getTextureIndex());
     
-    sceneShader.setUniform("showProjector", showProjector);
+    sceneShader.setUniform("showProjector", bShowProjector);
 }
 
 void drawSkyBox(const glm::mat4& inViewMaterix, const glm::mat4& inProjectionMatrix) {
@@ -969,21 +1039,24 @@ void drawSkyBox(const glm::mat4& inViewMaterix, const glm::mat4& inProjectionMat
     glDrawElements(GL_TRIANGLES, mesh->getIndexCount(), GL_UNSIGNED_INT, 0);
 }
 
-void drawLight(const glm::mat4& inViewMaterix, const glm::mat4& inProjectionMatrix) {
+void drawLights(const glm::mat4& inViewMaterix, const glm::mat4& inProjectionMatrix) {
     lightCubeShader.use();
 
-    glm::mat4 worldMatrix = glm::mat4(1.0f);
-    worldMatrix = glm::translate(worldMatrix, glm::vec3(lights[0].position.x, lights[0].position.y, lights[0].position.z));
-    worldMatrix = glm::scale(worldMatrix, glm::vec3(0.2f, 0.2f, 0.2f));
+    for (size_t i = 0; i < lights.size(); i++) {
+        if (lights[i].type == 0) {
+            glm::mat4 worldMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(lights[i].position.x, lights[i].position.y, lights[i].position.z));
+            worldMatrix = glm::scale(worldMatrix, glm::vec3(0.2f, 0.2f, 0.2f));
 
-    glm::mat4 mvpMatrix = inProjectionMatrix * inViewMaterix * worldMatrix;
+            glm::mat4 mvpMatrix = inProjectionMatrix * inViewMaterix * worldMatrix;
 
-    lightCubeShader.setUniform("mvpMatrix", mvpMatrix);
-    lightCubeShader.setUniform("color", glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+            lightCubeShader.setUniform("mvpMatrix", mvpMatrix);
+            lightCubeShader.setUniform("color", glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
 
-    glBindVertexArray(vao);
-    //glDrawArrays(GL_TRIANGLES, 0, 36);
-    glDrawElements(GL_TRIANGLES, 64, GL_UNSIGNED_INT, 0);
+            glBindVertexArray(lightCubeVao);
+            //glDrawArrays(GL_TRIANGLES, 0, 36);
+            glDrawElements(GL_TRIANGLES, 64, GL_UNSIGNED_INT, 0);
+        }
+    }
 }
 
 void updateMaterialUniform(const std::shared_ptr<Material>& material) {
@@ -1030,6 +1103,24 @@ void drawModels(const glm::mat4& inViewMaterix, const glm::mat4& inProjectionMat
     }
 }
 
+void drawNormals(const glm::mat4& inViewMaterix, const glm::mat4& inProjectionMatrix) {
+    lightCubeShader.use();
+
+    lightCubeShader.setUniform("color", glm::vec4(0.270588f, 0.552941f, 0.874510f, 1.0f));
+
+    for (size_t i = 1; i < models.size(); i++) {
+        glm::mat4 worldMatrix = models[i]->getTransform();
+        for (auto& mesh : models[i]->getMeshes()) {
+            mesh->useNormal();
+
+            glm::mat4 mvpMatrix = inProjectionMatrix * inViewMaterix * worldMatrix;
+
+            lightCubeShader.setUniform("mvpMatrix", mvpMatrix);
+            glDrawArrays(GL_LINES, 0, mesh->getNormalIndexCount());
+        }
+    }
+}
+
 void clear(ImVec4 color, int32_t clearFlag) {
     glClearColor(color.x, color.y, color.z, 1.0f);
     glClear(clearFlag);
@@ -1067,13 +1158,26 @@ void renderScene()
 
     clear(clearColor, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    //glViewport(WindowWidth - WindowWidth / 4, WindowHeight - WindowHeight / 4, WindowWidth / 4, WindowHeight / 4);
+    //viewMatrix = camera.getViewMatrix();
+    //camera.perspective(fov, static_cast<float>(WindowWidth) / WindowHeight, near, far);
+    //projectionMatrix = camera.getProjectionMatrix();
+
     drawSkyBox(viewMatrix, projectionMatrix);
 
     drawModels(viewMatrix, projectionMatrix);
 
     drawModel(models[models.size() - 1], viewMatrix, projectionMatrix);
 
-    drawLight(viewMatrix, projectionMatrix);
+    drawLights(viewMatrix, projectionMatrix);
+
+    if (bDrawNormals) {
+        drawNormals(viewMatrix, projectionMatrix);
+    }
+
+    glBindVertexArray(screenQuadVao);
+
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
 void render() {
@@ -1097,14 +1201,10 @@ void loadModels() {
 
     auto model = loadModel("./resources/models/cube.obj", "SkyBox");
     model->scale(glm::vec3(100.0f));
-    model->addTexture(getTexture("CubeMap"));
     models.push_back(model); 
     
     model = loadModel("./resources/models/torus.obj");
     model->setPosition(glm::vec3(-2.5f, 0.0f, 1.0f));
-    model->addTexture(getTexture("Fieldstone"));
-    model->addTexture(getTexture("FieldstoneBumpDOT3"));
-    model->setMaterial(material);
 
     //models.push_back(model);
 
@@ -1127,61 +1227,38 @@ void loadModels() {
         mesh->addIndex(sphere.Indices32[i]);
     }
 
-    model->setMaterial(material);
-
-    model->addTexture(getTexture("BrickDiffuse"));
-    model->addTexture(getTexture("BrickNormal"));
     model->setPosition(glm::vec3(0.0f, 1.0f, 0.0f));
-    model->setMaterial(material);
 
-    //models.push_back(model);
+    models.push_back(model);
 
     model = loadModel("./resources/models/plane.obj");
-    model->addTexture(getTexture("Fieldstone"));
-    model->addTexture(getTexture("FieldstoneBumpDOT3"));
     model->scale(glm::vec3(10.0f, 1.0f, 10.0f));
 
-    auto planeMaterial = std::make_shared<Material>();
-
-    planeMaterial->Ka = material->Ka;
-    planeMaterial->Kd = material->Ka;
-    planeMaterial->Ks = material->Ks;
-    planeMaterial->shininess = material->shininess;
-    planeMaterial->reflectionFactor = material->reflectionFactor;
-    planeMaterial->refractionFactor = material->refractionFactor;
-
-    model->setMaterial(planeMaterial);
+    //model->getMeshes()[0]->setMaterial(material);
 
     models.push_back(model);
 
     model = loadModel("./resources/models/teapot.obj");
-    model->addTexture(getTexture("Fieldstone"));
-    model->addTexture(getTexture("FieldstoneBumpDOT3"));
     model->setPosition(glm::vec3(2.5f, 0.0f, 1.0f));
-    model->setMaterial(material);
 
-    //models.push_back(model);
+    models.push_back(model);
 
     model = loadModel("./resources/models/crate.obj");
-    //model->addTexture(getTexture("CrateDiffuse"));
-    //model->addTexture(renderTexture);
-    //model->addTexture(getTexture("CrateNormal"));
-    model->setPosition(glm::vec3(0.0f, 1.0f, 2.0f));
-    model->setMaterial(material);
+    model->setPosition(glm::vec3(0.0f, 0.5f, 0.0f));
 
-    //models.push_back(model);
+    models.push_back(model);
 
     model = loadModel("./resources/models/plane.obj");
-    //model->addTexture(getTexture("CrateDiffuse"));
-    model->addTexture(renderTexture);
-    model->addTexture(getTexture("CrateNormal"));
     model->setPosition(glm::vec3(0.0f, 5.0f, -5.0f));
-    model->rotate(-90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-    model->setMaterial(material);
+    model->rotate(90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
     model->scale(glm::vec3(10.0f, 1.0f, 10.0f));
+    //model->getMeshes()[0]->getMaterial()->refractionFactor = 1.0f;
     models.push_back(model);
 
     model = loadModel("./resources/models/Marry/Marry.obj", "Marry", "./resources/models/Marry/", "./resources/models/Marry/");
+    model->setPosition(glm::vec3(0.0f, 1.0f, 0.0f));
+    //model->getMeshes()[0]->getMaterial()->refractionFactor = 1.0f;
+    //model->getMeshes()[1]->getMaterial()->refractionFactor = 1.0f;
     models.push_back(model);
 
     for (size_t i = 0; i < models.size(); i++) {

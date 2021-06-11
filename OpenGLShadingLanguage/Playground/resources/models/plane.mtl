@@ -1,7 +1,7 @@
 # Blender MTL File: 'plane.blend'
 # Material Count: 1
 
-newmtl Plane.
+newmtl Plane
 Ns 225.000000
 Ka 0.100000 0.100000 0.100000
 Kd 1.000000 1.000000 1.000000

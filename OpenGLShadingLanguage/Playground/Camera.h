@@ -79,6 +79,10 @@ public:
         projectionMatrix = glm::perspective(glm::radians(fov), aspect, near, far);
     }
 
+    void orthographic(float left, float right, float bottom, float top) {
+        projectionMatrix = glm::ortho<float>(left, right, bottom, top);
+    }
+
     const glm::mat4& getViewMatrix() const {
         return viewMatrix;
     }

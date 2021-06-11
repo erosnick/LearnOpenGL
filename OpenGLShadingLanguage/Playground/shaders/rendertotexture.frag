@@ -48,7 +48,7 @@ struct Fog {
 	vec4 color;
 };
 
-uniform Light lights[3];
+uniform Light lights[5];
 
 uniform Material material;
 
@@ -89,8 +89,8 @@ vec3 blinnPhong(Light light, vec3 worldPosition, vec3 normal, vec3 eye, vec3 alb
 	}
 	else if (light.position.w >= 1.0) {
 		lightDirection = normalize(light.position.xyz - worldPosition);
-		float d = length(worldPosition - light.position.xyz);
-		attenuation = computeAttenuation(light, d);
+		float distance = length(worldPosition - light.position.xyz);
+		attenuation = computeAttenuation(light, distance);
 	}
 
 	float nDotL = dot(normal, lightDirection);
@@ -127,7 +127,7 @@ vec3 blinnPhong(Light light, vec3 worldPosition, vec3 normal, vec3 eye, vec3 alb
 	}
 
 	return (diffuse + specular) * light.color.rgb * light.intensity * attenuation;
-	// return diffuse;
+	// return vec3(nDotL);
 }
 
 void main() {
@@ -139,12 +139,12 @@ void main() {
 	normal = normalize(worldNormal);
 
 	if (material.hasNormalMap) {
-		normal = texture(textures[1], texcoord).xyz;
+		normal = texture(textures[1], texcoord).rgb;
 		normal = normal * 2.0 - 1.0;
 		normal = normalize(vec3(dot(tangentToWorld1, normal), dot(tangentToWorld2, normal), dot(tangentToWorld3, normal)));
 	}
 
-	vec3 ambient = material.Ka;
+	vec3 ambient = material.Ka * albedo.rgb;
 
 	if (!gl_FrontFacing) {
 		normal = -normal;
@@ -156,6 +156,10 @@ void main() {
 
 	vec3 light3 = blinnPhong(lights[2], worldPosition, normal, eye, albedo.rgb, material);
 
+	vec3 light4 = blinnPhong(lights[3], worldPosition, normal, eye, albedo.rgb, material);
+
+	vec3 light5 = blinnPhong(lights[4], worldPosition, normal, eye, albedo.rgb, material);
+
 	float distance = length(eye - worldPosition);
 
 	float fogFactor = computeLinearFog(fog, distance);
@@ -163,7 +167,7 @@ void main() {
 	fogFactor = computeExponentFog(fog, distance, 2.0);
 
 	// vec3 finalColor = mix(fog.color.rgb, light1 + light2 + ambient, fogFactor);
-	vec3 finalColor = mix(fog.color.rgb, light2 + ambient, fogFactor);
+	vec3 finalColor = mix(fog.color.rgb, light1 + light2 + light3 + light4 + ambient, fogFactor);
 
 	vec4 reflectionColor = texture(cubeMap, reflectionDirection);
 	vec4 refractionColor = texture(cubeMap, refractionDirection);
@@ -179,8 +183,8 @@ void main() {
 		// fragColor = vec4(reflectionDirection, 1.0);
 	}
 	else {
-		// fragColor = mix(mix(vec4(finalColor + projectionTextureColor.rgb, 1.0), reflectionColor, material.reflectionFactor), refractionColor, material.refractionFactor);
+		fragColor = mix(mix(vec4(finalColor + projectionTextureColor.rgb, 1.0), reflectionColor, material.reflectionFactor), refractionColor, material.refractionFactor);
 		// vec3 color = projectionTextureColor.z > 0.0 ? projectionTextureColor.rgb :vec3(0.0);
-		fragColor = vec4(albedo.rgb * material.Kd, 1.0);
+		// fragColor = vec4(light2, 1.0);
 	}
 }

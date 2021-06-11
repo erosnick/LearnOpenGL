@@ -13,6 +13,10 @@
 #include "Texture.h"
 #include "Material.h"
 
+struct SimpleVertex {
+    glm::vec3 position;
+};
+
 struct Vertex {
     glm::vec3 position;
     glm::vec3 tangent;
@@ -105,6 +109,10 @@ public:
         return material;
     }
 
+    std::shared_ptr<Material>& getMaterial() {
+        return material;
+    }
+
     void setName(const std::string& inName) {
         name = inName;
     }
@@ -137,6 +145,10 @@ public:
         return indices.data();
     }
 
+    size_t getNormalIndexCount() const {
+        return normals.size() * 2;
+    }
+
     void computeTangentSpace();
 
     void prepareDraw();
@@ -144,15 +156,22 @@ public:
     void use() {
         glBindVertexArray(vao);
     }
+
+    void useNormal() {
+        glBindVertexArray(vaoNormal);
+    }
 private:
     std::string name;
 
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
+    std::vector<SimpleVertex> normals;
 
     uint32_t vbo = -1;
     uint32_t ibo = -1;
     uint32_t vao = -1;
+    uint32_t vboNormal = -1;
+    uint32_t vaoNormal = -1;
 
     std::shared_ptr<Material> material;
     std::vector<std::shared_ptr<Texture>> textures;
@@ -203,32 +222,6 @@ public:
 
     void prepareDraw();
 
-    void addTexture(const std::shared_ptr<Texture>& texture) {
-        textures.push_back(texture);
-    }
-
-    int32_t getTextureIndex(uint32_t index) const {
-        if (index >= textures.size()) {
-            return 0;
-        }
-
-        auto texture = textures[index];
-
-        if (texture) {
-            return texture->getTextureIndex();
-        }
-
-        return 0;
-    }
-
-    void setMaterial(const std::shared_ptr<Material>& inMaterial) {
-        material = inMaterial;
-    }
-
-    const std::shared_ptr<Material>& getMaterial() const {
-        return material;
-    }
-
     void setName(const std::string& inName) {
         name = inName;
     }
@@ -255,9 +248,6 @@ private:
 
     glm::vec3 position;
     glm::mat4 transform;
-
-    std::shared_ptr<Material> material;
-    std::vector<std::shared_ptr<Texture>> textures;
 
     std::vector <std::shared_ptr<Mesh>> meshes;
 

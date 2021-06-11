@@ -22,7 +22,13 @@ void Mesh::computeTangentSpace() {
         glm::vec3 vertex1 = vertices.at(indices.at(i + 1)).position;
         glm::vec3 vertex2 = vertices.at(indices.at(i + 2)).position;
 
+        glm::vec3 normal0 = vertices.at(indices.at(i + 0)).normal;
+        glm::vec3 normal1 = vertices.at(indices.at(i + 1)).normal;
+        glm::vec3 normal2 = vertices.at(indices.at(i + 2)).normal;
+
         glm::vec3 normal = glm::normalize(glm::cross((vertex1 - vertex0), (vertex2 - vertex0)));
+
+        normal = (normal0 + normal1 + normal2) / (glm::length(normal0 + normal1 + normal2));
 
         glm::vec3 deltaPos;
         if (vertex0 == vertex1)
@@ -49,6 +55,10 @@ void Mesh::computeTangentSpace() {
         tangent = glm::normalize(tangent - glm::dot(normal, tangent) * normal);
 
         binormal = glm::normalize(glm::cross(tangent, normal));
+
+        //vertices[indices.at(i + 0)].normal = { normal.x, normal.y, normal.z };
+        //vertices[indices.at(i + 1)].normal = { normal.x, normal.y, normal.z };
+        //vertices[indices.at(i + 2)].normal = { normal.x, normal.y, normal.z };
 
         // write into array - for each vertex of the face the same value
         vertices[indices.at(i + 0)].tangent = { tangent.x, tangent.y, tangent.z };
@@ -97,4 +107,28 @@ void Mesh::prepareDraw() {
     glGenBuffers(1, &ibo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, getIndexBufferByteSize(), getIndicesData(), GL_STATIC_DRAW);
+
+    glGenVertexArrays(1, &vaoNormal);
+    glBindVertexArray(vaoNormal);
+
+    glGenBuffers(1, &vboNormal);
+    glBindBuffer(GL_ARRAY_BUFFER, vboNormal);
+
+    for (size_t i = 0; i < vertices.size(); i++) {
+        Vertex vertex = vertices[i];
+        SimpleVertex simpleVertex;
+        simpleVertex.position = vertex.position;
+        normals.push_back(simpleVertex);
+        auto normal = vertex.normal / 5.0f;
+        simpleVertex.position += normal;
+        normals.push_back(simpleVertex);
+    }
+
+    stride = sizeof(SimpleVertex);
+
+    glBufferData(GL_ARRAY_BUFFER, sizeof(SimpleVertex) * normals.size(), normals.data(), GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)nullptr);
+    // Map index 0 to the position buffer
+    glEnableVertexAttribArray(0);	// Vertex Position
 }
