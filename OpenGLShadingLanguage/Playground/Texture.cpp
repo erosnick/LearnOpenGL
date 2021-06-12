@@ -9,7 +9,7 @@ uint32_t Texture::activeIndex = 0;
 
 std::string Texture::suffixes[] = { "posx", "negx", "posy", "negy", "posz", "negz" };
 
-Texture::Texture(const std::string& name, int32_t inWidth, int32_t inHeight) {
+Texture::Texture(const std::string& name, int32_t inWidth, int32_t inHeight, int32_t filter) {
 
     width = inWidth;
     height = inHeight;
@@ -26,8 +26,8 @@ Texture::Texture(const std::string& name, int32_t inWidth, int32_t inHeight) {
 
     delete[] data;
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
 }
 
 void Texture::load(const std::string& fileName, int32_t wrapMode) {

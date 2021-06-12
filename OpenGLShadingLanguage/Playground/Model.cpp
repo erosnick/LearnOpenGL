@@ -131,4 +131,8 @@ void Mesh::prepareDraw() {
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)nullptr);
     // Map index 0 to the position buffer
     glEnableVertexAttribArray(0);	// Vertex Position
+
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * 3));
+    // Map index 0 to the position buffer
+    glEnableVertexAttribArray(1);	// Vertex Position
 }

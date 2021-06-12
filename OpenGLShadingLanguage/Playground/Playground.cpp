@@ -52,6 +52,8 @@ uint32_t screenQuadVao;
 uint32_t textureId;
 Shader lightCubeShader;
 Shader sceneShader;
+Shader screenQuadShader;
+Shader sobelOperatorShader;
 
 std::vector<std::shared_ptr<Model>> models;
 
@@ -80,8 +82,8 @@ GLFWwindow* window = nullptr;
 
 std::vector<ImFont*> fonts;
 
-const uint32_t WindowWidth = 1280;
-const uint32_t WindowHeight = 720;
+const int32_t WindowWidth = 1280;
+const int32_t WindowHeight = 720;
 
 float frameTime = 0.0f;
 
@@ -112,6 +114,9 @@ uint32_t fbo;
 std::shared_ptr<Texture> renderTexture;
 std::shared_ptr<Texture> defaultAlbedo;
 uint32_t depthBuffer;
+
+float edgeThreshold = 0.0f;
+glm::vec3 edgeColor = { 1.0f, 1.0f, 1.0f };
 
 const std::shared_ptr<Texture>& getTexture(const std::string& name);
 std::shared_ptr<Model> loadModel(const std::string& fileName, const std::string& inName = "", const std::string& materialPath = "./resources/models", const std::string& texturePath = "./resources/textures/");
@@ -327,8 +332,11 @@ void prepareShaderResources() {
     //sceneShader.compileShaderFromFile("./shaders/projectivetexturemapping.vert", ShaderType::VERTEX);
     //sceneShader.compileShaderFromFile("./shaders/projectivetexturemapping.frag", ShaderType::FRAGMENT);
 
-    sceneShader.compileShaderFromFile("./shaders/rendertotexture.vert", ShaderType::VERTEX);
-    sceneShader.compileShaderFromFile("./shaders/rendertotexture.frag", ShaderType::FRAGMENT);
+    //sceneShader.compileShaderFromFile("./shaders/rendertotexture.vert", ShaderType::VERTEX);
+    //sceneShader.compileShaderFromFile("./shaders/rendertotexture.frag", ShaderType::FRAGMENT);
+
+    sceneShader.compileShaderFromFile("./shaders/edgedetection.vert", ShaderType::VERTEX);
+    sceneShader.compileShaderFromFile("./shaders/edgedetection.frag", ShaderType::FRAGMENT);
 
     sceneShader.link();
 
@@ -337,6 +345,18 @@ void prepareShaderResources() {
     lightCubeShader.compileShaderFromFile("./shaders/color.frag", ShaderType::FRAGMENT);
 
     lightCubeShader.link();
+
+    screenQuadShader.create();
+    screenQuadShader.compileShaderFromFile("./shaders/screenquad.vert", ShaderType::VERTEX);
+    screenQuadShader.compileShaderFromFile("./shaders/screenquad.frag", ShaderType::FRAGMENT);
+
+    screenQuadShader.link();
+
+    sobelOperatorShader.create();
+    sobelOperatorShader.compileShaderFromFile("./shaders/sobeloperator.vert", ShaderType::VERTEX);
+    sobelOperatorShader.compileShaderFromFile("./shaders/sobeloperator.frag", ShaderType::FRAGMENT);
+
+    sobelOperatorShader.link();
 
     //// »ñÈ¡uniform blockË÷Òý
     //auto blockIndex = glGetUniformBlockIndex(sceneShader.get(), "BlobSettings");
@@ -533,10 +553,10 @@ void prepareGeometryData() {
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
     SimpleVertex screenQuadVertices[] = {
-        {{0.0f, 0.0f, 0.0f}},
-        {{WindowWidth, 0.0f, 0.0f}},
-        {{WindowWidth, WindowHeight, 0.0f}},
-        {{0.0f, WindowHeight, 0.0f}}
+        {{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+        {{WindowWidth, 0.0f, 0.0f}, {1.0f, 0.0f}},
+        {{WindowWidth, WindowHeight, 0.0f}, {1.0f, 1.0f}},
+        {{0.0f, WindowHeight, 0.0f}, {0.0f, 1.0f}}
     };
 
     uint32_t screenQuadIndices[] = {
@@ -557,6 +577,9 @@ void prepareGeometryData() {
 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)nullptr);
     glEnableVertexAttribArray(0);
+
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * 3));
+    glEnableVertexAttribArray(1);
     
     uint32_t screenQuadIbo;
 
@@ -901,6 +924,8 @@ void buildImGuiWidgets()
         ImGui::SliderFloat("Refraction", &commonMaterial->refractionFactor, 0.0f, 1.0f);
         ImGui::SliderFloat("Shininess", &commonMaterial->shininess, 32.0f, 128.0f);
         ImGui::SliderFloat("Fog Density", &fog.density, 0.0f, 1.0f);
+        ImGui::SliderFloat("Edge Threshold", &edgeThreshold, 0.0f, 1.0f);
+        ImGui::ColorEdit3("Edge color", (float*)&edgeColor);
         ImGui::ColorEdit3("Clear color", (float*)&clearColor); // Edit 3 floats representing a color
         ImGui::ColorEdit3("Point Light Color", (float*)&lights[0].color);
         ImGui::ColorEdit3("Directional Light Color", (float*)&lights[1].color);
@@ -1126,15 +1151,15 @@ void clear(ImVec4 color, int32_t clearFlag) {
     glClear(clearFlag);
 }
 
-void renderToTexture() {
+void renderToTexture(uint32_t width = 512, uint32_t height = 512) {
     // Bind to texture's FBO
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-    glViewport(0, 0, 512, 512); // Viewport for the texture
+    glViewport(0, 0, width, height); // Viewport for the texture
 
     clear(clearColor, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glm::mat4 viewMatrix = camera.getViewMatrix();
-    camera.perspective(fov, 1.0f, near, far);
+    camera.perspective(fov, static_cast<float>(width) / height, near, far);
     glm::mat4 projectionMatrix = camera.getProjectionMatrix();
 
     drawSkyBox(viewMatrix, projectionMatrix);
@@ -1145,11 +1170,29 @@ void renderToTexture() {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+void drawScreenQuad() {
+
+    glBindVertexArray(screenQuadVao);
+
+    camera.orthographic(0.0f, WindowWidth, 0.0f, WindowHeight);
+    glm::mat4 projectionMatrix = camera.getProjectionMatrix();
+
+    sobelOperatorShader.use();
+    sobelOperatorShader.setUniform("sceneTexture", renderTexture->getTextureIndex());
+    sobelOperatorShader.setUniform("projectionMatrix", projectionMatrix);
+    sobelOperatorShader.setUniform("width", WindowWidth);
+    sobelOperatorShader.setUniform("height", WindowHeight);
+    sobelOperatorShader.setUniform("edgeThreshold", edgeThreshold);
+    sobelOperatorShader.setUniform("edgeColor", edgeColor);
+
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+}
+
 void renderScene()
 {
     updateGlobalUniform();
 
-    renderToTexture();
+    renderToTexture(WindowWidth, WindowHeight);
 
     glViewport(0, 0, WindowWidth, WindowHeight);
     glm::mat4 viewMatrix = camera.getViewMatrix();
@@ -1175,9 +1218,7 @@ void renderScene()
         drawNormals(viewMatrix, projectionMatrix);
     }
 
-    glBindVertexArray(screenQuadVao);
-
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    drawScreenQuad();
 }
 
 void render() {
@@ -1248,17 +1289,17 @@ void loadModels() {
 
     models.push_back(model);
 
+    model = loadModel("./resources/models/Marry/Marry.obj", "Marry", "./resources/models/Marry/", "./resources/models/Marry/");
+    model->setPosition(glm::vec3(0.0f, 1.0f, 0.0f));
+    //model->getMeshes()[0]->getMaterial()->refractionFactor = 1.0f;
+    //model->getMeshes()[1]->getMaterial()->refractionFactor = 1.0f;
+    models.push_back(model);
+
     model = loadModel("./resources/models/plane.obj");
     model->setPosition(glm::vec3(0.0f, 5.0f, -5.0f));
     model->rotate(90.0f, glm::vec3(1.0f, 0.0f, 0.0f));
     model->scale(glm::vec3(10.0f, 1.0f, 10.0f));
     //model->getMeshes()[0]->getMaterial()->refractionFactor = 1.0f;
-    models.push_back(model);
-
-    model = loadModel("./resources/models/Marry/Marry.obj", "Marry", "./resources/models/Marry/", "./resources/models/Marry/");
-    model->setPosition(glm::vec3(0.0f, 1.0f, 0.0f));
-    //model->getMeshes()[0]->getMaterial()->refractionFactor = 1.0f;
-    //model->getMeshes()[1]->getMaterial()->refractionFactor = 1.0f;
     models.push_back(model);
 
     for (size_t i = 0; i < models.size(); i++) {
@@ -1271,7 +1312,7 @@ void prepareTextures() {
     // Create the render texture
     addTexture("Error", "./resources/textures/Error.png");
 
-    renderTexture = std::make_shared<Texture>("renderTexture", 512, 512);
+    renderTexture = std::make_shared<Texture>("renderTexture", WindowWidth, WindowHeight, GL_NEAREST);
 
     defaultAlbedo = std::make_shared<Texture>("defaultAlbedo", 1, 1);
 

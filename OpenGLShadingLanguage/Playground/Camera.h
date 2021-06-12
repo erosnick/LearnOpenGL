@@ -80,7 +80,7 @@ public:
     }
 
     void orthographic(float left, float right, float bottom, float top) {
-        projectionMatrix = glm::ortho<float>(left, right, bottom, top);
+        projectionMatrix = glm::ortho<float>(left, right, bottom, top, -1.0f, 1.0f);
     }
 
     const glm::mat4& getViewMatrix() const {
