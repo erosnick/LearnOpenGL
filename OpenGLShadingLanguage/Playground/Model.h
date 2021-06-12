@@ -59,9 +59,9 @@ public:
     }
 
     ~Mesh() {
-        glDeleteBuffers(1, &vbo);
-        glDeleteBuffers(1, &ibo);
-        glDeleteBuffers(1, &vao);
+        glDeleteBuffers(1, &VBO);
+        glDeleteBuffers(1, &IBO);
+        glDeleteBuffers(1, &VAO);
     }
 
     void addVertex(const Vertex& vertex) {
@@ -155,7 +155,7 @@ public:
     void prepareDraw();
 
     void use() {
-        glBindVertexArray(vao);
+        glBindVertexArray(VAO);
     }
 
     void useNormal() {
@@ -168,9 +168,9 @@ private:
     std::vector<uint32_t> indices;
     std::vector<SimpleVertex> normals;
 
-    uint32_t vbo = -1;
-    uint32_t ibo = -1;
-    uint32_t vao = -1;
+    uint32_t VBO = -1;
+    uint32_t IBO = -1;
+    uint32_t VAO = -1;
     uint32_t vboNormal = -1;
     uint32_t vaoNormal = -1;
 

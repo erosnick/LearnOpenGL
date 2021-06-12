@@ -72,11 +72,11 @@ void Mesh::computeTangentSpace() {
 }
 
 void Mesh::prepareDraw() {
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
 
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glGenBuffers(1, &VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, getVertexBufferByteSize(), getVerticesData(), GL_STATIC_DRAW);
 
     int32_t stride = sizeof(Vertex);
@@ -104,8 +104,8 @@ void Mesh::prepareDraw() {
     // Map index 1 to the texture coordinate buffer
     glEnableVertexAttribArray(4);	//
 
-    glGenBuffers(1, &ibo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+    glGenBuffers(1, &IBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, getIndexBufferByteSize(), getIndicesData(), GL_STATIC_DRAW);
 
     glGenVertexArrays(1, &vaoNormal);

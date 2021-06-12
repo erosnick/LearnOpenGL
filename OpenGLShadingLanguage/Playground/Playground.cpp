@@ -47,13 +47,14 @@ struct Fog {
     glm::vec4 color;
 };
 
-uint32_t lightCubeVao;
-uint32_t screenQuadVao;
+uint32_t lightCubeVAO;
+uint32_t screenQuadVAO;
 uint32_t textureId;
 Shader lightCubeShader;
 Shader sceneShader;
 Shader screenQuadShader;
 Shader sobelOperatorShader;
+Shader gaussianBlurShader;
 
 std::vector<std::shared_ptr<Model>> models;
 
@@ -110,13 +111,20 @@ glm::mat4 projectorProjection = glm::perspective(glm::radians(60.0f), static_cas
 glm::mat4 projectorScaleTranslate = glm::mat4(1.0f);
 glm::mat4 projectorTransform = glm::mat4(1.0f);
 
-uint32_t fbo;
+uint32_t renderSceneFBO;
+uint32_t gaussianBlurFBO;
 std::shared_ptr<Texture> renderTexture;
+std::shared_ptr<Texture> gaussianBlurredTexture;
 std::shared_ptr<Texture> defaultAlbedo;
 uint32_t depthBuffer;
 
 float edgeThreshold = 0.0f;
 glm::vec3 edgeColor = { 1.0f, 1.0f, 1.0f };
+
+char uniformName[20];
+float weights[10];
+float sum;
+float sigmaSquared = 4.0f;
 
 const std::shared_ptr<Texture>& getTexture(const std::string& name);
 std::shared_ptr<Model> loadModel(const std::string& fileName, const std::string& inName = "", const std::string& materialPath = "./resources/models", const std::string& texturePath = "./resources/textures/");
@@ -258,7 +266,7 @@ void processInput(GLFWwindow* window) {
     camera.updateViewMatrix();
 }
 
-void prepareFrameBufferObject() {
+void generateFrameBufferObject(uint32_t &fbo, const std::shared_ptr<Texture>& renderTexture, bool hasDepthBuffer = true) {
     // Generate and bind the framebuffer
     glGenFramebuffers(1, &fbo);
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
@@ -266,15 +274,17 @@ void prepareFrameBufferObject() {
     // Bind the texture to the FBO
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderTexture->getTextureId(), 0);
 
-    // Create the depth buffer
-    glGenRenderbuffers(1, &depthBuffer);
-    glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, renderTexture->getWidth(), renderTexture->getHeight());
+    if (hasDepthBuffer) {
+        // Create the depth buffer
+        glGenRenderbuffers(1, &depthBuffer);
+        glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, renderTexture->getWidth(), renderTexture->getHeight());
 
-    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+        glBindRenderbuffer(GL_RENDERBUFFER, 0);
 
-    // Bind the depth buffer to the FBO
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBuffer);
+        // Bind the depth buffer to the FBO
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBuffer);
+    }
 
     // Set the target for the fragment shader outputs
     uint32_t drawBuffers[] = { GL_COLOR_ATTACHMENT0 };
@@ -286,6 +296,37 @@ void prepareFrameBufferObject() {
 
     // Unbind the framebuffer, and revert to default framebuffer
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void prepareFrameBufferObject() {
+    generateFrameBufferObject(renderSceneFBO, renderTexture);
+    generateFrameBufferObject(gaussianBlurFBO, gaussianBlurredTexture, false);
+}
+
+float gaussian(int value, float sigmaSquared) {
+    float exponent = glm::exp(-(glm::pow(static_cast<float>(value), 2.0f) / (2 * sigmaSquared)));
+    float denominator = glm::sqrt(2.0f * glm::pi<float>() * sigmaSquared);
+    return 1.0f / denominator * exponent;
+}
+
+void computeGaussianBlurWeights() {
+    // Compute and sum the weights
+    weights[0] = gaussian(0, sigmaSquared); // The 1-D Gaussian function
+    sum = weights[0];
+
+    for (int i = 1; i < 5; i++) {
+        weights[i] = gaussian(i, sigmaSquared);
+        sum += 2 * weights[i];
+    }
+
+    gaussianBlurShader.use();
+
+    // Normalize the weights and set the uniform
+    for (int i = 0; i < 5; i++) {
+        snprintf(uniformName, 20, "weights[%d]", i);
+        gaussianBlurShader.setUniform(uniformName, weights[i] / sum);
+        //std::cout << weights[i] / sum << std::endl;
+    }
 }
 
 void prepareShaderResources() {
@@ -357,6 +398,12 @@ void prepareShaderResources() {
     sobelOperatorShader.compileShaderFromFile("./shaders/sobeloperator.frag", ShaderType::FRAGMENT);
 
     sobelOperatorShader.link();
+
+    gaussianBlurShader.create();
+    gaussianBlurShader.compileShaderFromFile("./shaders/gaussianblur.vert", ShaderType::VERTEX);
+    gaussianBlurShader.compileShaderFromFile("./shaders/gaussianblur.frag", ShaderType::FRAGMENT);
+    
+    gaussianBlurShader.link();
 
     //// »ñÈ¡uniform blockË÷Òý
     //auto blockIndex = glGetUniformBlockIndex(sceneShader.get(), "BlobSettings");
@@ -511,17 +558,17 @@ void prepareGeometryData() {
     };
 
     // Create the buffer objects
-    uint32_t lightCubeVbo;
-    glGenBuffers(1, &lightCubeVbo);
+    uint32_t lightCubeVBO;
+    glGenBuffers(1, &lightCubeVBO);
 
-    uint32_t lightCubeIbo;
-    glGenBuffers(1, &lightCubeIbo);
+    uint32_t lightCubeIBO;
+    glGenBuffers(1, &lightCubeIBO);
 
     // Create and setup the vertex array object
-    glGenVertexArrays(1, &lightCubeVao);
-    glBindVertexArray(lightCubeVao);
+    glGenVertexArrays(1, &lightCubeVAO);
+    glBindVertexArray(lightCubeVAO);
 
-    glBindBuffer(GL_ARRAY_BUFFER, lightCubeVbo);
+    glBindBuffer(GL_ARRAY_BUFFER, lightCubeVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
     int32_t stride = sizeof(Vertex);
@@ -549,7 +596,7 @@ void prepareGeometryData() {
     // Map index 1 to the texture coordinate buffer
     glEnableVertexAttribArray(4);	//
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, lightCubeIbo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, lightCubeIBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
     SimpleVertex screenQuadVertices[] = {
@@ -564,8 +611,8 @@ void prepareGeometryData() {
         2, 3, 0
     };
 
-    glGenVertexArrays(1, &screenQuadVao);
-    glBindVertexArray(screenQuadVao);
+    glGenVertexArrays(1, &screenQuadVAO);
+    glBindVertexArray(screenQuadVAO);
 
     uint32_t screenQuadVbo;
     glGenBuffers(1, &screenQuadVbo);
@@ -925,6 +972,7 @@ void buildImGuiWidgets()
         ImGui::SliderFloat("Shininess", &commonMaterial->shininess, 32.0f, 128.0f);
         ImGui::SliderFloat("Fog Density", &fog.density, 0.0f, 1.0f);
         ImGui::SliderFloat("Edge Threshold", &edgeThreshold, 0.0f, 1.0f);
+        ImGui::SliderFloat("SigmaSquared", &sigmaSquared, 0.001f, 10.0f);
         ImGui::ColorEdit3("Edge color", (float*)&edgeColor);
         ImGui::ColorEdit3("Clear color", (float*)&clearColor); // Edit 3 floats representing a color
         ImGui::ColorEdit3("Point Light Color", (float*)&lights[0].color);
@@ -1077,7 +1125,7 @@ void drawLights(const glm::mat4& inViewMaterix, const glm::mat4& inProjectionMat
             lightCubeShader.setUniform("mvpMatrix", mvpMatrix);
             lightCubeShader.setUniform("color", glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
 
-            glBindVertexArray(lightCubeVao);
+            glBindVertexArray(lightCubeVAO);
             //glDrawArrays(GL_TRIANGLES, 0, 36);
             glDrawElements(GL_TRIANGLES, 64, GL_UNSIGNED_INT, 0);
         }
@@ -1151,9 +1199,17 @@ void clear(ImVec4 color, int32_t clearFlag) {
     glClear(clearFlag);
 }
 
+void drawScene(glm::mat4 viewMatrix, glm::mat4 projectionMatrix) {
+    clear(clearColor, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    drawSkyBox(viewMatrix, projectionMatrix);
+
+    drawModels(viewMatrix, projectionMatrix);
+}
+
 void renderToTexture(uint32_t width = 512, uint32_t height = 512) {
     // Bind to texture's FBO
-    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, renderSceneFBO);
     glViewport(0, 0, width, height); // Viewport for the texture
 
     clear(clearColor, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1162,28 +1218,44 @@ void renderToTexture(uint32_t width = 512, uint32_t height = 512) {
     camera.perspective(fov, static_cast<float>(width) / height, near, far);
     glm::mat4 projectionMatrix = camera.getProjectionMatrix();
 
-    drawSkyBox(viewMatrix, projectionMatrix);
-
-    drawModels(viewMatrix, projectionMatrix);
+    drawScene(viewMatrix, projectionMatrix);
 
     // Unbind texture's FBO (back to default FB)
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void drawScreenQuad() {
+void drawEdgeDetection() {
 
-    glBindVertexArray(screenQuadVao);
+    glBindVertexArray(screenQuadVAO);
 
     camera.orthographic(0.0f, WindowWidth, 0.0f, WindowHeight);
     glm::mat4 projectionMatrix = camera.getProjectionMatrix();
 
     sobelOperatorShader.use();
-    sobelOperatorShader.setUniform("sceneTexture", renderTexture->getTextureIndex());
+    sobelOperatorShader.setUniform("renderTexture", renderTexture->getTextureIndex());
     sobelOperatorShader.setUniform("projectionMatrix", projectionMatrix);
     sobelOperatorShader.setUniform("width", WindowWidth);
     sobelOperatorShader.setUniform("height", WindowHeight);
     sobelOperatorShader.setUniform("edgeThreshold", edgeThreshold);
     sobelOperatorShader.setUniform("edgeColor", edgeColor);
+
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+}
+
+void drawGaussianBlur(const std::shared_ptr<Texture>& renderTexture, float verticalPass = true) {
+    glBindVertexArray(screenQuadVAO);
+
+    camera.orthographic(0.0f, WindowWidth, 0.0f, WindowHeight);
+    glm::mat4 projectionMatrix = camera.getProjectionMatrix();
+
+    gaussianBlurShader.use();
+    gaussianBlurShader.setUniform("renderTexture", renderTexture->getTextureIndex());
+    gaussianBlurShader.setUniform("projectionMatrix", projectionMatrix);
+    gaussianBlurShader.setUniform("width", WindowWidth);
+    gaussianBlurShader.setUniform("height", WindowHeight);
+    gaussianBlurShader.setUniform("verticalPass", verticalPass);
+
+    computeGaussianBlurWeights();
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
@@ -1199,16 +1271,12 @@ void renderScene()
     camera.perspective(fov, static_cast<float>(WindowWidth) / WindowHeight, near, far);
     glm::mat4 projectionMatrix = camera.getProjectionMatrix();
 
-    clear(clearColor, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
     //glViewport(WindowWidth - WindowWidth / 4, WindowHeight - WindowHeight / 4, WindowWidth / 4, WindowHeight / 4);
     //viewMatrix = camera.getViewMatrix();
     //camera.perspective(fov, static_cast<float>(WindowWidth) / WindowHeight, near, far);
     //projectionMatrix = camera.getProjectionMatrix();
 
-    drawSkyBox(viewMatrix, projectionMatrix);
-
-    drawModels(viewMatrix, projectionMatrix);
+    drawScene(viewMatrix, projectionMatrix);
 
     drawModel(models[models.size() - 1], viewMatrix, projectionMatrix);
 
@@ -1218,7 +1286,15 @@ void renderScene()
         drawNormals(viewMatrix, projectionMatrix);
     }
 
-    drawScreenQuad();
+    glBindFramebuffer(GL_FRAMEBUFFER, gaussianBlurFBO);
+    clear(clearColor, GL_COLOR_BUFFER_BIT);
+    drawGaussianBlur(renderTexture);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    clear(clearColor, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    drawGaussianBlur(gaussianBlurredTexture, false);
+
+    //drawEdgeDetection();
 }
 
 void render() {
@@ -1312,7 +1388,9 @@ void prepareTextures() {
     // Create the render texture
     addTexture("Error", "./resources/textures/Error.png");
 
-    renderTexture = std::make_shared<Texture>("renderTexture", WindowWidth, WindowHeight, GL_NEAREST);
+    renderTexture = std::make_shared<Texture>("sceneTexture", WindowWidth, WindowHeight, GL_NEAREST);
+
+    gaussianBlurredTexture = std::make_shared<Texture>("gaussianBlurredTexture", WindowWidth, WindowHeight, GL_LINEAR);
 
     defaultAlbedo = std::make_shared<Texture>("defaultAlbedo", 1, 1);
 
