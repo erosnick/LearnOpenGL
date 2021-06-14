@@ -55,6 +55,8 @@ Shader sceneShader;
 Shader screenQuadShader;
 Shader sobelOperatorShader;
 Shader gaussianBlurShader;
+Shader bloomShader;
+Shader extractBrightnessShader;
 
 std::vector<std::shared_ptr<Model>> models;
 
@@ -112,19 +114,26 @@ glm::mat4 projectorScaleTranslate = glm::mat4(1.0f);
 glm::mat4 projectorTransform = glm::mat4(1.0f);
 
 uint32_t renderSceneFBO;
-uint32_t gaussianBlurFBO;
-std::shared_ptr<Texture> renderTexture;
+uint32_t gaussianBlurPassFBO;
+uint32_t gaussianBlurredFBO;
+uint32_t brightnessFBO;
+std::shared_ptr<Texture> sceneTexture;
+std::shared_ptr<Texture> gaussianBlurPassTexture;
 std::shared_ptr<Texture> gaussianBlurredTexture;
+std::shared_ptr<Texture> brightnessTexture;
+std::shared_ptr<Texture> testTexture;
 std::shared_ptr<Texture> defaultAlbedo;
 uint32_t depthBuffer;
 
-float edgeThreshold = 0.0f;
+float edgeThreshold = 0.05f;
 glm::vec3 edgeColor = { 1.0f, 1.0f, 1.0f };
 
 char uniformName[20];
-float weights[10];
+std::vector<float> weights(10);
 float sum;
 float sigmaSquared = 4.0f;
+
+float luminanceThreshold = 0.75f;
 
 const std::shared_ptr<Texture>& getTexture(const std::string& name);
 std::shared_ptr<Model> loadModel(const std::string& fileName, const std::string& inName = "", const std::string& materialPath = "./resources/models", const std::string& texturePath = "./resources/textures/");
@@ -136,43 +145,43 @@ void APIENTRY glDebugOutput(GLenum source,
     GLsizei length,
     const GLchar* message,
     const void* userParam) {
-    // 忽略一些不重要的错误/警告代码
-    if (id == 131169 || id == 131185 || id == 131218 || id == 131204) return;
+// 忽略一些不重要的错误/警告代码
+if (id == 131169 || id == 131185 || id == 131218 || id == 131204) return;
 
-    std::cout << "---------------" << std::endl;
-    std::cout << "Debug message (" << id << "): " << message << std::endl;
+std::cout << "---------------" << std::endl;
+std::cout << "Debug message (" << id << "): " << message << std::endl;
 
-    switch (source)
-    {
-    case GL_DEBUG_SOURCE_API:             std::cout << "Source: API"; break;
-    case GL_DEBUG_SOURCE_WINDOW_SYSTEM:   std::cout << "Source: Window System"; break;
-    case GL_DEBUG_SOURCE_SHADER_COMPILER: std::cout << "Source: Shader Compiler"; break;
-    case GL_DEBUG_SOURCE_THIRD_PARTY:     std::cout << "Source: Third Party"; break;
-    case GL_DEBUG_SOURCE_APPLICATION:     std::cout << "Source: Application"; break;
-    case GL_DEBUG_SOURCE_OTHER:           std::cout << "Source: Other"; break;
-    } std::cout << std::endl;
+switch (source)
+{
+case GL_DEBUG_SOURCE_API:             std::cout << "Source: API"; break;
+case GL_DEBUG_SOURCE_WINDOW_SYSTEM:   std::cout << "Source: Window System"; break;
+case GL_DEBUG_SOURCE_SHADER_COMPILER: std::cout << "Source: Shader Compiler"; break;
+case GL_DEBUG_SOURCE_THIRD_PARTY:     std::cout << "Source: Third Party"; break;
+case GL_DEBUG_SOURCE_APPLICATION:     std::cout << "Source: Application"; break;
+case GL_DEBUG_SOURCE_OTHER:           std::cout << "Source: Other"; break;
+} std::cout << std::endl;
 
-    switch (type)
-    {
-    case GL_DEBUG_TYPE_ERROR:               std::cout << "Type: Error"; break;
-    case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: std::cout << "Type: Deprecated Behaviour"; break;
-    case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  std::cout << "Type: Undefined Behaviour"; break;
-    case GL_DEBUG_TYPE_PORTABILITY:         std::cout << "Type: Portability"; break;
-    case GL_DEBUG_TYPE_PERFORMANCE:         std::cout << "Type: Performance"; break;
-    case GL_DEBUG_TYPE_MARKER:              std::cout << "Type: Marker"; break;
-    case GL_DEBUG_TYPE_PUSH_GROUP:          std::cout << "Type: Push Group"; break;
-    case GL_DEBUG_TYPE_POP_GROUP:           std::cout << "Type: Pop Group"; break;
-    case GL_DEBUG_TYPE_OTHER:               std::cout << "Type: Other"; break;
-    } std::cout << std::endl;
+switch (type)
+{
+case GL_DEBUG_TYPE_ERROR:               std::cout << "Type: Error"; break;
+case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: std::cout << "Type: Deprecated Behaviour"; break;
+case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  std::cout << "Type: Undefined Behaviour"; break;
+case GL_DEBUG_TYPE_PORTABILITY:         std::cout << "Type: Portability"; break;
+case GL_DEBUG_TYPE_PERFORMANCE:         std::cout << "Type: Performance"; break;
+case GL_DEBUG_TYPE_MARKER:              std::cout << "Type: Marker"; break;
+case GL_DEBUG_TYPE_PUSH_GROUP:          std::cout << "Type: Push Group"; break;
+case GL_DEBUG_TYPE_POP_GROUP:           std::cout << "Type: Pop Group"; break;
+case GL_DEBUG_TYPE_OTHER:               std::cout << "Type: Other"; break;
+} std::cout << std::endl;
 
-    switch (severity)
-    {
-    case GL_DEBUG_SEVERITY_HIGH:         std::cout << "Severity: high"; break;
-    case GL_DEBUG_SEVERITY_MEDIUM:       std::cout << "Severity: medium"; break;
-    case GL_DEBUG_SEVERITY_LOW:          std::cout << "Severity: low"; break;
-    case GL_DEBUG_SEVERITY_NOTIFICATION: std::cout << "Severity: notification"; break;
-    } std::cout << std::endl;
-    std::cout << std::endl;
+switch (severity)
+{
+case GL_DEBUG_SEVERITY_HIGH:         std::cout << "Severity: high"; break;
+case GL_DEBUG_SEVERITY_MEDIUM:       std::cout << "Severity: medium"; break;
+case GL_DEBUG_SEVERITY_LOW:          std::cout << "Severity: low"; break;
+case GL_DEBUG_SEVERITY_NOTIFICATION: std::cout << "Severity: notification"; break;
+} std::cout << std::endl;
+std::cout << std::endl;
 }
 
 void onFrameBufferResize(GLFWwindow* window, int width, int height) {
@@ -182,8 +191,8 @@ void onFrameBufferResize(GLFWwindow* window, int width, int height) {
     }
 }
 
-void onKeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {    
-	ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
+void onKeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
 }
 
 void onMouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
@@ -235,6 +244,11 @@ void onMouseMoveCallback(GLFWwindow* window, double x, double y) {
 }
 
 void processInput(GLFWwindow* window) {
+
+    if (ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard) {
+        return;
+    }
+
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, true);
 	}
@@ -299,8 +313,10 @@ void generateFrameBufferObject(uint32_t &fbo, const std::shared_ptr<Texture>& re
 }
 
 void prepareFrameBufferObject() {
-    generateFrameBufferObject(renderSceneFBO, renderTexture);
-    generateFrameBufferObject(gaussianBlurFBO, gaussianBlurredTexture, false);
+    generateFrameBufferObject(renderSceneFBO, sceneTexture);
+    generateFrameBufferObject(gaussianBlurPassFBO, gaussianBlurPassTexture, false);
+    generateFrameBufferObject(gaussianBlurredFBO, gaussianBlurredTexture, false);
+    generateFrameBufferObject(brightnessFBO, brightnessTexture, false);
 }
 
 float gaussian(int value, float sigmaSquared) {
@@ -309,11 +325,12 @@ float gaussian(int value, float sigmaSquared) {
     return 1.0f / denominator * exponent;
 }
 
-void computeGaussianBlurWeights() {
+void computeGaussianBlurWeights(std::vector<float>& weights, float sigmaSquared) {
     // Compute and sum the weights
     weights[0] = gaussian(0, sigmaSquared); // The 1-D Gaussian function
     sum = weights[0];
 
+    // Sum of the raw Gaussian weights
     for (int i = 1; i < 5; i++) {
         weights[i] = gaussian(i, sigmaSquared);
         sum += 2 * weights[i];
@@ -321,7 +338,9 @@ void computeGaussianBlurWeights() {
 
     gaussianBlurShader.use();
 
-    // Normalize the weights and set the uniform
+    // The Gaussian weights must sum to one in order to be a true weighted
+    // average.Therefore, we need to normalize our Gaussian weights
+    // Normalize the weights(weights[i] / sum part) and set the uniform
     for (int i = 0; i < 5; i++) {
         snprintf(uniformName, 20, "weights[%d]", i);
         gaussianBlurShader.setUniform(uniformName, weights[i] / sum);
@@ -404,6 +423,18 @@ void prepareShaderResources() {
     gaussianBlurShader.compileShaderFromFile("./shaders/gaussianblur.frag", ShaderType::FRAGMENT);
     
     gaussianBlurShader.link();
+    
+    bloomShader.create();
+    bloomShader.compileShaderFromFile("./shaders/bloom.vert", ShaderType::VERTEX);
+    bloomShader.compileShaderFromFile("./shaders/bloom.frag", ShaderType::FRAGMENT);
+
+    bloomShader.link();
+
+    extractBrightnessShader.create();
+    extractBrightnessShader.compileShaderFromFile("./shaders/extractBrightness.vert", ShaderType::VERTEX);
+    extractBrightnessShader.compileShaderFromFile("./shaders/extractBrightness.frag", ShaderType::FRAGMENT);
+
+    extractBrightnessShader.link();
 
     //// 获取uniform block索引
     //auto blockIndex = glGetUniformBlockIndex(sceneShader.get(), "BlobSettings");
@@ -971,7 +1002,8 @@ void buildImGuiWidgets()
         ImGui::SliderFloat("Refraction", &commonMaterial->refractionFactor, 0.0f, 1.0f);
         ImGui::SliderFloat("Shininess", &commonMaterial->shininess, 32.0f, 128.0f);
         ImGui::SliderFloat("Fog Density", &fog.density, 0.0f, 1.0f);
-        ImGui::SliderFloat("Edge Threshold", &edgeThreshold, 0.0f, 1.0f);
+        ImGui::SliderFloat("Edge Threshold", &edgeThreshold, 0.05f, 1.0f);
+        ImGui::SliderFloat("Luminance Threshold", &luminanceThreshold, 0.0f, 1.0f);
         ImGui::SliderFloat("SigmaSquared", &sigmaSquared, 0.001f, 10.0f);
         ImGui::ColorEdit3("Edge color", (float*)&edgeColor);
         ImGui::ColorEdit3("Clear color", (float*)&clearColor); // Edit 3 floats representing a color
@@ -1224,7 +1256,7 @@ void renderToTexture(uint32_t width = 512, uint32_t height = 512) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void drawEdgeDetection() {
+void drawEdgeDetection(const std::shared_ptr<Texture>& renderTexture) {
 
     glBindVertexArray(screenQuadVAO);
 
@@ -1255,7 +1287,48 @@ void drawGaussianBlur(const std::shared_ptr<Texture>& renderTexture, float verti
     gaussianBlurShader.setUniform("height", WindowHeight);
     gaussianBlurShader.setUniform("verticalPass", verticalPass);
 
-    computeGaussianBlurWeights();
+    computeGaussianBlurWeights(weights, sigmaSquared);
+
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+}
+
+void drawBloom(const std::shared_ptr<Texture>& sceneTexture, const std::shared_ptr<Texture>& bloomTexture) {
+    glBindVertexArray(screenQuadVAO);
+
+    camera.orthographic(0.0f, WindowWidth, 0.0f, WindowHeight);
+    glm::mat4 projectionMatrix = camera.getProjectionMatrix();
+
+    bloomShader.use();
+    bloomShader.setUniform("sceneTexture", sceneTexture->getTextureIndex());
+    bloomShader.setUniform("bloomTexture", bloomTexture->getTextureIndex());
+    bloomShader.setUniform("projectionMatrix", projectionMatrix);
+
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+}
+
+void extractBrightness(const std::shared_ptr<Texture>& sceneTexture, float luminanceThreshold) {
+    glBindVertexArray(screenQuadVAO);
+
+    camera.orthographic(0.0f, WindowWidth, 0.0f, WindowHeight);
+    glm::mat4 projectionMatrix = camera.getProjectionMatrix();
+
+    extractBrightnessShader.use();
+    extractBrightnessShader.setUniform("sceneTexture", sceneTexture->getTextureIndex());
+    extractBrightnessShader.setUniform("projectionMatrix", projectionMatrix);
+    extractBrightnessShader.setUniform("luminanceThreshold", luminanceThreshold);
+
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+}
+
+void drawScreenQuad(const std::shared_ptr<Texture>& renderTexture) {
+    glBindVertexArray(screenQuadVAO);
+
+    camera.orthographic(0.0f, WindowWidth, 0.0f, WindowHeight);
+    glm::mat4 projectionMatrix = camera.getProjectionMatrix();
+
+    screenQuadShader.use();
+    screenQuadShader.setUniform("projectionMatrix", projectionMatrix);
+    screenQuadShader.setUniform("renderTexture", renderTexture->getTextureIndex());
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
@@ -1286,15 +1359,43 @@ void renderScene()
         drawNormals(viewMatrix, projectionMatrix);
     }
 
-    glBindFramebuffer(GL_FRAMEBUFFER, gaussianBlurFBO);
-    clear(clearColor, GL_COLOR_BUFFER_BIT);
-    drawGaussianBlur(renderTexture);
+    //glBindFramebuffer(GL_FRAMEBUFFER, gaussianBlurPassFBO);
+    //clear(clearColor, GL_COLOR_BUFFER_BIT);
+    //drawGaussianBlur(renderTexture);
 
+    //glBindFramebuffer(GL_FRAMEBUFFER, gaussianBlurredFBO);
+    //clear(clearColor, GL_COLOR_BUFFER_BIT);
+    //drawGaussianBlur(gaussianBlurPassTexture, false);
+
+    //glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    //clear(clearColor, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    //drawGaussianBlur(gaussianBlurPassTexture, false);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, brightnessFBO);
+    clear(clearColor, GL_COLOR_BUFFER_BIT);
+    extractBrightness(sceneTexture, luminanceThreshold);
+
+    // Gaussian blur first pass
+    glBindFramebuffer(GL_FRAMEBUFFER, gaussianBlurPassFBO);
+    clear(clearColor, GL_COLOR_BUFFER_BIT);
+    drawGaussianBlur(brightnessTexture);
+
+    // Gaussian blur second pass
+    glBindFramebuffer(GL_FRAMEBUFFER, gaussianBlurredFBO);
+    clear(clearColor, GL_COLOR_BUFFER_BIT);
+    drawGaussianBlur(gaussianBlurPassTexture, false);
+    
+    //glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    //clear(clearColor, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    //drawScreenQuad(gaussianBlurredTexture);
+
+    //// Sobel operator edge detection pass
+    //glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    //clear(clearColor, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    //drawEdgeDetection(gaussianBlurredTexture);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     clear(clearColor, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    drawGaussianBlur(gaussianBlurredTexture, false);
-
-    //drawEdgeDetection();
+    drawBloom(sceneTexture, gaussianBlurredTexture);
 }
 
 void render() {
@@ -1388,9 +1489,17 @@ void prepareTextures() {
     // Create the render texture
     addTexture("Error", "./resources/textures/Error.png");
 
-    renderTexture = std::make_shared<Texture>("sceneTexture", WindowWidth, WindowHeight, GL_NEAREST);
+    sceneTexture = std::make_shared<Texture>("sceneTexture", WindowWidth, WindowHeight, GL_NEAREST);
 
-    gaussianBlurredTexture = std::make_shared<Texture>("gaussianBlurredTexture", WindowWidth, WindowHeight, GL_LINEAR);
+    gaussianBlurPassTexture = std::make_shared<Texture>("gaussianBlurPassTexture", WindowWidth, WindowHeight, GL_NEAREST);
+
+    gaussianBlurredTexture = std::make_shared<Texture>("gaussianBlurredTexture", WindowWidth, WindowHeight, GL_NEAREST);
+
+    brightnessTexture = std::make_shared<Texture>("brightnessTexture", WindowWidth, WindowHeight, GL_NEAREST);
+
+    //testTexture = addTexture("Valve", "./resources/textures/Valve_original.png");
+
+    testTexture = addTexture("Valve", "./resources/textures/Bikesgray.jpg");
 
     defaultAlbedo = std::make_shared<Texture>("defaultAlbedo", 1, 1);
 
@@ -1404,7 +1513,6 @@ void prepareTextures() {
     //addTexture("CrateDiffuse", "./resources/textures/CrateDiffuse.png");
     //addTexture("CrateNormal", "./resources/textures/CrateNormal.png");
     addTexture("Projection", "./resources/textures/Kanna.jpg", GL_CLAMP_TO_BORDER);
-
 }
 
 int main() {
