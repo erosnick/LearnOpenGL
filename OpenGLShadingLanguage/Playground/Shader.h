@@ -19,7 +19,9 @@ enum class ShaderType : int32_t {
 class Shader
 {
 public:
-	Shader();
+	Shader(const std::string& inName)
+	: name(inName) {
+	}
 
 	void create();
 
@@ -58,5 +60,6 @@ private:
 	int32_t program = -1;
 	bool linked = false;
 	std::string log = "";
+	std::string name;
 };
 

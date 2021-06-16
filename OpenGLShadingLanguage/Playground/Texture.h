@@ -6,7 +6,8 @@
 
 class Texture {
 public:
-    Texture(const std::string& name, int32_t inWidth, int32_t inHeight, int32_t filter = GL_LINEAR);
+    Texture() {}
+    Texture(const std::string& name, int32_t inWidth, int32_t inHeight, int32_t filter = GL_LINEAR, bool fillData = true, int32_t internalFormat = GL_RGBA, int32_t format = GL_RGBA);
     // 创建Cube Map时传入的fileName是路径+6张图片文件名中共有的部分
     // 比如sunset_posX，sunset_posY中的sunset部分，filaName应该
     // 是./path/sunset

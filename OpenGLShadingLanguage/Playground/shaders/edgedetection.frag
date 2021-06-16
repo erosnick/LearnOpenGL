@@ -68,6 +68,10 @@ uniform bool drawSkyBox = false;
 
 uniform bool showProjector = false;
 
+uniform float gamma = 2.2;
+
+uniform float gammaInversed = 1.0 / 2.2;
+
 // subroutine vec4 renderPassType();
 // subroutine uniform renderPassType renderPass;
 
@@ -137,6 +141,8 @@ void main() {
 
 	vec4 albedo = texture(textures[0], texcoord);
 
+	albedo = vec4(pow(albedo.rgb, vec3(gamma)), 1.0);
+
 	vec3 normal = vec3(0);
 	
 	normal = normalize(worldNormal);
@@ -170,7 +176,8 @@ void main() {
 	fogFactor = computeExponentFog(fog, distance, 2.0);
 
 	// vec3 finalColor = mix(fog.color.rgb, light1 + light2 + ambient, fogFactor);
-	vec3 finalColor = mix(fog.color.rgb, light1 + light2 + light3 + light4 + ambient, fogFactor);
+	// vec3 finalColor = mix(fog.color.rgb, light1 + light2 + light3 + light4 + ambient, fogFactor);
+	vec3 finalColor = mix(fog.color.rgb, light1 + light4 + ambient, fogFactor);
 
 	vec4 reflectionColor = texture(cubeMap, reflectionDirection);
 	vec4 refractionColor = texture(cubeMap, refractionDirection);
@@ -186,7 +193,8 @@ void main() {
 		// fragColor = vec4(reflectionDirection, 1.0);
 	}
 	else {
-		fragColor = mix(mix(vec4(finalColor + projectionTextureColor.rgb, 1.0), reflectionColor, material.reflectionFactor), refractionColor, material.refractionFactor);
+		finalColor = mix(mix(vec4(finalColor + projectionTextureColor.rgb, 1.0), reflectionColor, material.reflectionFactor), refractionColor, material.refractionFactor).rgb;
+		fragColor = vec4(pow(finalColor, vec3(gammaInversed)), 1.0);
 		// vec3 color = projectionTextureColor.z > 0.0 ? projectionTextureColor.rgb :vec3(0.0);
 		// fragColor = vec4(light2, 1.0);
 	}

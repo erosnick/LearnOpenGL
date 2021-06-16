@@ -3,11 +3,6 @@
 #include <iostream>
 #include <fstream>
 
-Shader::Shader()
-{
-	
-}
-
 void Shader::create()
 {
 	program = glCreateProgram();
@@ -194,24 +189,25 @@ void Shader::printActiveUniforms() {
 	glGetProgramiv(program, GL_ACTIVE_UNIFORM_MAX_LENGTH, &maxLength);
 	glGetProgramiv(program, GL_ACTIVE_UNIFORMS, &numUniforms);
 
-	char* name = new char[maxLength];
+	char* uniformName = new char[maxLength];
 
 	int32_t size = 0;
 	int32_t location = 0;
 	int32_t written = 0;
 	uint32_t type = 0;
 
+	std::cout << "*****" << name << "*****" << std::endl;
 	std::cout << "Location | Name\n";
 	std::cout << "---------------------------------\n";
 
 
 	for (auto i = 0; i < numUniforms; i++) {
-		glGetActiveUniform(program, i, maxLength, &written, &size, &type, name);
-		location = glGetUniformLocation(program, name);
-		std::cout << "       " << location << " | " << name << std::endl;
+		glGetActiveUniform(program, i, maxLength, &written, &size, &type, uniformName);
+		location = glGetUniformLocation(program, uniformName);
+		std::cout << "       " << location << " | " << uniformName << std::endl;
 	}
 
-	delete[] name;
+	delete[] uniformName;
 }
 
 int32_t Shader::getUniformLocation(const std::string& name)

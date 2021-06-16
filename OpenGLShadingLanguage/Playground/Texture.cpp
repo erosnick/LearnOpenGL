@@ -9,7 +9,7 @@ uint32_t Texture::activeIndex = 0;
 
 std::string Texture::suffixes[] = { "posx", "negx", "posy", "negy", "posz", "negz" };
 
-Texture::Texture(const std::string& name, int32_t inWidth, int32_t inHeight, int32_t filter) {
+Texture::Texture(const std::string& name, int32_t inWidth, int32_t inHeight, int32_t filter, bool fillData, int32_t internalFormat, int32_t format) {
 
     width = inWidth;
     height = inHeight;
@@ -18,13 +18,18 @@ Texture::Texture(const std::string& name, int32_t inWidth, int32_t inHeight, int
     glActiveTexture(GL_TEXTURE0 + activeIndex++);
     glBindTexture(GL_TEXTURE_2D, id);
 
-    uint8_t* data = new uint8_t[width * height * 4];
+    if (fillData) {
 
-    memset(data, 255, width * height * 4);
-    
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+        uint8_t* data = new uint8_t[width * height * 4];
 
-    delete[] data;
+        memset(data, 255, width * height * 4);
+
+        glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+
+        stbi_image_free(data);
+    }
+
+    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, GL_UNSIGNED_BYTE, nullptr);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);

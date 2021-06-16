@@ -7,6 +7,7 @@ layout (location = 3) in vec3 inNormal;
 layout (location = 4) in vec2 inTexcoord;
 
 uniform mat4 worldMatrix;
+uniform mat4 normalMatrix;
 uniform mat4 mvpMatrix;
 uniform mat4 projectorTransform;
 uniform vec3 eye;

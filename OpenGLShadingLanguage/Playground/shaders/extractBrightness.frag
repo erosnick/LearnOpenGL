@@ -15,8 +15,14 @@ float luminance(vec3 color) {
 
 vec4 extract() {
 	vec4 value = texture(sceneTexture, texcoord);
-
+	// return value;
 	return value * clamp(luminance(value.rgb) - luminanceThreshold, 0.0, 1.0) * (1.0 / (1.0 - luminanceThreshold));
+	// return vec4(vec3(clamp(luminance(value.rgb) - luminanceThreshold, 0.0, 1.0) * (1.0 / (1.0 - luminanceThreshold))), 1.0);
+	// if (luminance(value.rgb) > luminanceThreshold) {
+	// 	return vec4(vec3(luminance(value.rgb)), 1.0);
+	// }
+
+	// return vec4(0.0);
 }
 
 void main() {
