@@ -60,13 +60,13 @@ public:
         isDirty = true;
     }
 
-    const glm::vec3& getEye() const {
-        return eye;
-    }
-
     void updateViewMatrix() {
         if (isDirty) {
             viewMatrix = glm::lookAt(eye, center, up);
+            right = { viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0] };
+            up = { viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1] };
+            forward = { viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2] };
+            forward = -forward;
             isDirty = false;
         }
     }
@@ -80,7 +80,7 @@ public:
     }
 
     void orthographic(float left, float right, float bottom, float top) {
-        projectionMatrix = glm::ortho<float>(left, right, bottom, top, -1.0f, 1.0f);
+        projectionMatrix = glm::ortho(left, right, bottom, top, -1.0f, 1.0f);
     }
 
     const glm::mat4& getViewMatrix() const {
@@ -91,6 +91,21 @@ public:
         return projectionMatrix;
     }
 
+    const glm::vec3 getRight() const {
+        return right;
+    }
+
+    const glm::vec3 getUp() const {
+        return up;
+    }
+
+    const glm::vec3 getForward() const {
+        return forward;
+    }
+
+    const glm::vec3 getEye() const {
+        return eye;
+    }
 private:
     float fov = 60.0f;
     float near = 0.1f;

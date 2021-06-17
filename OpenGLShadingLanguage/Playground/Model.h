@@ -139,16 +139,16 @@ public:
         return indices;
     }
 
-    size_t getIndexCount() const {
-        return indices.size();
+    int32_t getIndexCount() const {
+        return static_cast<int32_t>(indices.size());
     }
 
     const uint32_t* getIndicesData() const {
         return indices.data();
     }
 
-    size_t getNormalIndexCount() const {
-        return normals.size() * 2;
+    int32_t getNormalIndexCount() const {
+        return static_cast<int32_t>(normals.size() * 2);
     }
 
     void computeTangentSpace();

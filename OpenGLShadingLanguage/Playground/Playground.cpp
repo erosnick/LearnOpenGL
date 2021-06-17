@@ -87,8 +87,10 @@ GLFWwindow* window = nullptr;
 
 std::vector<ImFont*> fonts;
 
-const int32_t WindowWidth = 1280;
-const int32_t WindowHeight = 720;
+int32_t WindowWidth = 1280;
+int32_t WindowHeight = 720;
+
+float aspect = static_cast<float>(WindowWidth) / WindowHeight;
 
 float frameTime = 0.0f;
 
@@ -111,7 +113,7 @@ float far = 200.0f;
 Camera camera({ 0.0f, 2.5f, 4.5f }, { 0.0f, 2.5f, -1.0f });
 
 glm::mat4 projectorView = glm::lookAt(projectorPosition, projectAt, projectorUp);
-glm::mat4 projectorProjection = glm::perspective(glm::radians(60.0f), static_cast<float>(WindowWidth) / WindowHeight, near, far);
+glm::mat4 projectorProjection = glm::perspective(glm::radians(60.0f), aspect, near, far);
 glm::mat4 projectorScaleTranslate = glm::mat4(1.0f);
 glm::mat4 projectorTransform = glm::mat4(1.0f);
 
@@ -193,7 +195,10 @@ std::cout << std::endl;
 
 void onFrameBufferResize(GLFWwindow* window, int width, int height) {
     if (width > 0 && height > 0) {
-        camera.perspective(fov, static_cast<float>(width) / height, near, far);
+        WindowWidth = width;
+        WindowHeight = height;
+        aspect = static_cast<float>(width) / height;
+        camera.perspective(fov, aspect, near, far);
         glViewport(0, 0, width, height);
     }
 }
@@ -234,7 +239,7 @@ void onScrollCallback(GLFWwindow* window, double xOffset, double yOffset) {
         return;
     }
 
-    camera.walk(yOffset / 8.0f);
+    camera.walk(static_cast<float>(yOffset / 8.0f));
 }
 
 void onMouseMoveCallback(GLFWwindow* window, double x, double y) {
@@ -247,8 +252,8 @@ void onMouseMoveCallback(GLFWwindow* window, double x, double y) {
     }
 
     if (bMiddleMouseButtonDown) {
-        camera.strafe(-dx / 2.0f);
-        camera.raise(dy / 2.0f);
+        camera.strafe(static_cast<float>(-dx / 2.0f));
+        camera.raise(static_cast<float>(dy / 2.0f));
     }
 
     lastMousePosition.x = static_cast<float>(x);
@@ -453,8 +458,8 @@ void prepareShaderResources() {
     //sceneShader.compileShaderFromFile("./shaders/rendertotexture.vert", ShaderType::VERTEX);
     //sceneShader.compileShaderFromFile("./shaders/rendertotexture.frag", ShaderType::FRAGMENT);
 
-    //sceneShader = createShader("./shaders/edgedetection");
-    sceneShader = createShader("gbuffer", "./shaders/gbuffer");
+    sceneShader = createShader("edgedetection", "./shaders/edgedetection");
+    //sceneShader = createShader("gbuffer", "./shaders/gbuffer");
 
     lightCubeShader = createShader("color", "./shaders/color");
 
@@ -1185,7 +1190,7 @@ void drawSkyBox(const glm::mat4& inViewMaterix, const glm::mat4& inProjectionMat
 
     sceneShader->setUniform("worldMatrix", worldMatrix);
     sceneShader->setUniform("mvpMatrix", mvpMatrix);
-
+    
     glDrawElements(GL_TRIANGLES, mesh->getIndexCount(), GL_UNSIGNED_INT, 0);
 }
 
@@ -1244,6 +1249,7 @@ void drawModel(const std::shared_ptr<Model>& model, const glm::mat4& inViewMater
 
         sceneShader->setUniform("worldMatrix", worldMatrix);
         sceneShader->setUniform("mvpMatrix", mvpMatrix);
+        sceneShader->setUniform("projectionMatrix", inProjectionMatrix);
         //sceneShader->setUniform("normalMatrix", glm::transpose(glm::inverse(worldMatrix)));
         sceneShader->setUniform("normalMatrix", worldMatrix);
 
@@ -1285,7 +1291,7 @@ void drawScene(glm::mat4 viewMatrix, glm::mat4 projectionMatrix) {
 
     sceneShader->use();
 
-    drawSkyBox(viewMatrix, projectionMatrix);
+    //drawSkyBox(viewMatrix, projectionMatrix);
 
     drawModels(viewMatrix, projectionMatrix);
 }
@@ -1298,7 +1304,7 @@ void renderToTexture(uint32_t width = 512, uint32_t height = 512) {
     clear(clearColor, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glm::mat4 viewMatrix = camera.getViewMatrix();
-    camera.perspective(fov, static_cast<float>(width) / height, near, far);
+    camera.perspective(fov, aspect, near, far);
     glm::mat4 projectionMatrix = camera.getProjectionMatrix();
 
     drawScene(viewMatrix, projectionMatrix);
@@ -1313,7 +1319,7 @@ void drawEdgeDetection(const std::shared_ptr<Texture>& renderTexture) {
 
     glBindVertexArray(screenQuadVAO);
 
-    camera.orthographic(0.0f, WindowWidth, 0.0f, WindowHeight);
+    camera.orthographic(0.0f, static_cast<float>(WindowWidth), 0.0f, static_cast<float>(WindowHeight));
     glm::mat4 projectionMatrix = camera.getProjectionMatrix();
 
     sobelOperatorShader->use();
@@ -1330,7 +1336,7 @@ void drawEdgeDetection(const std::shared_ptr<Texture>& renderTexture) {
 void drawGaussianBlur(const std::shared_ptr<Texture>& renderTexture, float verticalPass = true) {
     glBindVertexArray(screenQuadVAO);
 
-    camera.orthographic(0.0f, WindowWidth, 0.0f, WindowHeight);
+    camera.orthographic(0.0f, static_cast<float>(WindowWidth), 0.0f, static_cast<float>(WindowHeight));
     glm::mat4 projectionMatrix = camera.getProjectionMatrix();
 
     gaussianBlurShader->use();
@@ -1348,7 +1354,7 @@ void drawGaussianBlur(const std::shared_ptr<Texture>& renderTexture, float verti
 void drawBloom(const std::shared_ptr<Texture>& sceneTexture, const std::shared_ptr<Texture>& bloomTexture) {
     glBindVertexArray(screenQuadVAO);
 
-    camera.orthographic(0.0f, WindowWidth, 0.0f, WindowHeight);
+    camera.orthographic(0.0f, static_cast<float>(WindowWidth), 0.0f, static_cast<float>(WindowHeight));
     glm::mat4 projectionMatrix = camera.getProjectionMatrix();
 
     bloomShader->use();
@@ -1362,7 +1368,7 @@ void drawBloom(const std::shared_ptr<Texture>& sceneTexture, const std::shared_p
 void extractBrightness(const std::shared_ptr<Texture>& sceneTexture, float luminanceThreshold) {
     glBindVertexArray(screenQuadVAO);
 
-    camera.orthographic(0.0f, WindowWidth, 0.0f, WindowHeight);
+    camera.orthographic(0.0f, static_cast<float>(WindowWidth), 0.0f, static_cast<float>(WindowHeight));
     glm::mat4 projectionMatrix = camera.getProjectionMatrix();
 
     extractBrightnessShader->use();
@@ -1376,7 +1382,7 @@ void extractBrightness(const std::shared_ptr<Texture>& sceneTexture, float lumin
 void drawScreenQuad(const std::shared_ptr<Texture>& renderTexture) {
     glBindVertexArray(screenQuadVAO);
 
-    camera.orthographic(0.0f, WindowWidth, 0.0f, WindowHeight);
+    camera.orthographic(0.0f, static_cast<float>(WindowWidth), 0.0f, static_cast<float>(WindowHeight));
     glm::mat4 projectionMatrix = camera.getProjectionMatrix();
 
     screenQuadShader->use();
@@ -1391,8 +1397,27 @@ void deferredShading() {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     clear(clearColor, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    camera.orthographic(0.0f, WindowWidth, 0.0f, WindowHeight);
+    camera.orthographic(0.0f, static_cast<float>(WindowWidth), 0.0f, static_cast<float>(WindowHeight));
     glm::mat4 projectionMatrix = camera.getProjectionMatrix();
+
+    //projectionMatrix = glm::mat4(1.0f);
+
+    //glm::mat4 scale = glm::mat4(1.0f);
+
+    ////  Orthogonal projection near = -1.0f, far 1.0f
+    //scale[0][0] = 2.0f / WindowWidth;
+    //scale[1][1] = 2.0f / WindowHeight;
+    //scale[2][2] = -1.0f; // 2.0f / (near - far) = 2.0f / (-1.0f - 1.0f) = -1.0f
+    //                     // or -2.0f / (far - near) = -2.0f / (1.0f - (-1.0f)) = -1.0f
+    //scale[2][3] = 1.0f;
+
+    //glm::mat4 translate = glm::mat4(1.0f);
+
+    //translate[3][0] = -WindowWidth / 2.0f;
+    //translate[3][1] = -WindowHeight / 2.0f;
+    //translate[3][2] = 0.0f;
+
+    //projectionMatrix = scale * translate;
 
     deferredShadingShader->use();
     deferredShadingShader->setUniform("projectionMatrix", projectionMatrix);
@@ -1416,8 +1441,65 @@ void renderGBuffer() {
 
     glViewport(0, 0, WindowWidth, WindowHeight);
     glm::mat4 viewMatrix = camera.getViewMatrix();
-    camera.perspective(fov, static_cast<float>(WindowWidth) / WindowHeight, near, far);
+
+    viewMatrix = glm::mat4(1.0f);
+
+    glm::vec3 right = camera.getRight();
+    glm::vec3 up = camera.getUp();
+    glm::vec3 forward = camera.getForward();
+
+    viewMatrix[0][0] = right.x;
+    viewMatrix[0][1] = up.x;
+    viewMatrix[0][2] = -forward.x;
+
+    viewMatrix[1][0] = right.y;
+    viewMatrix[1][1] = up.y;
+    viewMatrix[1][2] = -forward.y;
+
+    viewMatrix[2][0] = right.z;
+    viewMatrix[2][1] = up.z;
+    viewMatrix[2][2] = -forward.z;
+
+    viewMatrix[3][0] = -glm::dot(right, camera.getEye());
+    viewMatrix[3][1] = -glm::dot(up, camera.getEye());
+    viewMatrix[3][2] = glm::dot(forward, camera.getEye());
+
+    camera.perspective(fov, aspect, near, far);
     glm::mat4 projectionMatrix = camera.getProjectionMatrix();
+
+    //projectionMatrix = glm::mat4(1.0f);
+
+    //glm::mat4 scale = glm::mat4(1.0f);
+
+    ////  Orthogonal projection near = -1.0f, far 1.0f
+    //scale[0][0] = 2.0f / WindowWidth;
+    //scale[1][1] = 2.0f / WindowHeight;
+    //scale[2][2] = 2.0f / (near - far); // 2.0f / (near - far) = 2.0f / (-1.0f - 1.0f) = -1.0f
+    //                                   // or -2.0f / (far - near) = -2.0f / (1.0f - (-1.0f)) = -1.0f
+    ////scale[2][3] = 1.0f;
+
+    //glm::mat4 translate = glm::mat4(1.0f);
+
+    //translate[3][0] = -WindowWidth / 2.0f;
+    //translate[3][1] = -WindowHeight / 2.0f;
+    //translate[3][2] = -(near + far) / 2.0f;
+
+    //glm::mat4 orthogonalMatrix = scale * translate;
+
+    //projectionMatrix[0][0] = near;
+    //projectionMatrix[1][1] = near;
+    //projectionMatrix[2][2] = near + far; // A
+    //projectionMatrix[2][3] = 1.0f;
+    //projectionMatrix[3][2] = -near * far; // B
+    //projectionMatrix[3][3] = 0.0f;
+
+    //glm::vec4 np = { 10.0f, 10.0f, near, 1.0f};
+    //glm::vec4 fp = { 0.0f, 0.0f, far, 1.0f};
+
+    //np = projectionMatrix * np;
+    //fp = projectionMatrix * fp;
+
+    //projectionMatrix = orthogonalMatrix * projectionMatrix;
 
     drawScene(viewMatrix, projectionMatrix);
     drawModel(models[models.size() - 1], viewMatrix, projectionMatrix);
@@ -1436,11 +1518,11 @@ void renderScene()
 
     //renderToTexture(WindowWidth, WindowHeight);
 
-    renderGBuffer();
+    //renderGBuffer();
 
     glViewport(0, 0, WindowWidth, WindowHeight);
     glm::mat4 viewMatrix = camera.getViewMatrix();
-    camera.perspective(fov, static_cast<float>(WindowWidth) / WindowHeight, near, far);
+    camera.perspective(fov, aspect, near, far);
     glm::mat4 projectionMatrix = camera.getProjectionMatrix();
 
     //glViewport(WindowWidth - WindowWidth / 4, WindowHeight - WindowHeight / 4, WindowWidth / 4, WindowHeight / 4);
@@ -1448,17 +1530,74 @@ void renderScene()
     //camera.perspective(fov, static_cast<float>(WindowWidth) / WindowHeight, near, far);
     //projectionMatrix = camera.getProjectionMatrix();
 
-    //drawScene(viewMatrix, projectionMatrix);
+    projectionMatrix = glm::mat4(1.0f);
 
-    //drawModel(models[models.size() - 1], viewMatrix, projectionMatrix);
+    glm::mat4 scale = glm::mat4(1.0f);
 
-    //drawLights(viewMatrix, projectionMatrix);
+    float nearZ = -near;
+    float farZ = -far;
+
+    // 这里陷入了之前做全屏四边形渲染时的思维定势，以为l r b t要符合窗口大小
+    // 而实际上这里的l r b t是和投影平面相关的。它们之间存在着以下关系：
+    // l = -r, l < r; b = -t, b < t，(r - l) = w, (t - b) = h
+    // 为了简单起见可以直接将使h = 2，则w = h * aspect，垂直视角α
+    // 则有b = -tan(α / 2) * near = -h / 2, 
+    // t = tan(α / 2) * near = h / 2
+    // 水平视角为β，同理有l = -tan(β / 2) * near = -w / 2
+    // 因为w = h * aspect, -w / 2 = -(h * aspect) / 2 
+    // = -tan(α / 2) * near * aspect，这里还可以求出水平视角β
+    float tanHalfFovy = glm::tan(glm::radians(fov / 2.0f));
+    float r = tanHalfFovy * nearZ * aspect;
+    float l = -r; 
+    float t = tanHalfFovy * nearZ;
+    float b = -t;
+    scale[0][0] = 2.0f / (r - l);
+    scale[1][1] = 2.0f / (t - b);
+    scale[2][2] = 2.0f / (nearZ - farZ);
+    //scale[2][3] = 1.0f;
+
+    glm::mat4 translate = glm::mat4(1.0f);
+
+    translate[3][0] = -(r + l) / 2.0f;
+    translate[3][1] = -(b + t) / 2.0f;
+    translate[3][2] = -(farZ + nearZ) / 2.0f;
+
+    glm::mat4 orthogonalMatrix = scale * translate;
+
+    orthogonalMatrix = glm::ortho(l, r, b, t, nearZ, farZ);
+
+    projectionMatrix[0][0] = nearZ;
+    projectionMatrix[1][1] = nearZ;
+    projectionMatrix[2][2] = nearZ + farZ; // A
+    projectionMatrix[2][3] = -1.0f;
+    projectionMatrix[3][2] = -nearZ * farZ; // B
+    projectionMatrix[3][3] = 0.0f;
+
+    ////glm::vec4 np = { 10.0f, 10.0f, near, 1.0f };
+    ////glm::vec4 fp = { 0.0f, 0.0f, far, 1.0f };
+
+    ////np = projectionMatrix * np;
+    ////fp = projectionMatrix * fp;
+
+    projectionMatrix = orthogonalMatrix * projectionMatrix;
+
+    //projectionMatrix[0][0] = static_cast<float>(1) / (aspect * tanHalfFovy);
+    //projectionMatrix[1][1] = static_cast<float>(1) / (tanHalfFovy);
+    //projectionMatrix[2][2] = (nearZ + farZ) / (nearZ - farZ);
+    //projectionMatrix[2][3] = -static_cast<float>(1);
+    //projectionMatrix[3][2] = -(static_cast<float>(2) * nearZ * farZ) / (nearZ - farZ);
+
+    drawScene(viewMatrix, projectionMatrix);
+
+    drawModel(models[models.size() - 1], viewMatrix, projectionMatrix);
+
+    drawLights(viewMatrix, projectionMatrix);
 
     //glBindFramebuffer(GL_FRAMEBUFFER, 0);
     //clear(clearColor, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     //drawScreenQuad(diffuseColorTexture);
 
-    deferredShading();
+    //deferredShading();
 
     if (bDrawNormals) {
         drawNormals(viewMatrix, projectionMatrix);
@@ -1670,7 +1809,7 @@ int main() {
 	sceneShader->printActiveAttributes();
 	sceneShader->printActiveUniforms();
 
-    camera.perspective(60.0f, static_cast<float>(WindowWidth) / WindowHeight, near, far);
+    camera.perspective(fov, aspect, near, far);
 
     loadModels();
 
